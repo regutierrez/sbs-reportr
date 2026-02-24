@@ -1,4 +1,5 @@
 import type {
+  GenerateReportResponse,
   ImageUploadResult,
   PhotoGroupName,
   ReportFormFields,
@@ -7,6 +8,14 @@ import type {
 } from '@/types/report'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+
+export function resolveApiUrl(path: string): string {
+  if (/^https?:\/\//.test(path)) {
+    return path
+  }
+
+  return `${API_BASE_URL}${path}`
+}
 
 export class ApiError extends Error {
   status: number
@@ -68,5 +77,11 @@ export function uploadReportImage(
   return requestJson<ImageUploadResult>(`/reports/${sessionId}/images/${groupName}`, {
     method: 'POST',
     body: formData,
+  })
+}
+
+export function generateReport(sessionId: string): Promise<GenerateReportResponse> {
+  return requestJson<GenerateReportResponse>(`/reports/${sessionId}/generate`, {
+    method: 'POST',
   })
 }

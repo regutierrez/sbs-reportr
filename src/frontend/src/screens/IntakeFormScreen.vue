@@ -1,69 +1,25 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { ApiError, createReportSession, saveReportFormFields, uploadReportImage } from '@/api'
 import ImageUploadField from '@/components/ImageUploadField.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
+import {
+  useReportIntakeDraft,
+  type UploadItem,
+} from '@/composables/use-report-intake-draft'
 import { PHOTO_GROUPS, type PhotoGroupConfig } from '@/constants/photo-groups'
-import type { ImageMeta, PhotoGroupName, ReportFormFields } from '@/types/report'
+import type { PhotoGroupName, ReportFormFields } from '@/types/report'
 import { compressImageForUpload } from '@/utils/image-compression'
 
-type UploadState = 'pending' | 'compressing' | 'uploading' | 'uploaded' | 'error'
+const router = useRouter()
+const { confirmationReady, form, generatedDownloadUrl, selectionWarnings, sessionId, uploads } =
+  useReportIntakeDraft()
 
-interface UploadItem {
-  id: string
-  name: string
-  file: File
-  previewUrl: string
-  status: UploadState
-  message: string
-  uploadedImage: ImageMeta | null
-}
-
-const form = reactive<ReportFormFields>({
-  building_details: {
-    testing_date: '',
-    building_name: '',
-    building_location: '',
-    number_of_storey: 0,
-  },
-  superstructure: {
-    rebar_scanning: {
-      number_of_rebar_scan_locations: 0,
-    },
-    rebound_hammer_test: {
-      number_of_rebound_hammer_test_locations: 0,
-    },
-    concrete_core_extraction: {
-      number_of_coring_locations: 0,
-    },
-    rebar_extraction: {
-      number_of_rebar_samples_extracted: 0,
-    },
-    restoration_works: {
-      non_shrink_grout_product_used: '',
-      epoxy_ab_used: '',
-    },
-  },
-  substructure: {
-    concrete_core_extraction: {
-      number_of_foundation_locations: 0,
-      number_of_foundation_cores_extracted: 0,
-    },
-  },
-  signature: {
-    prepared_by: '',
-    prepared_by_role: '',
-  },
-})
-
-const sessionId = ref<string | null>(null)
 const isSubmitting = ref(false)
 const submitError = ref('')
 const submitSuccess = ref('')
-
-const uploads = reactive(buildUploadMap<UploadItem[]>([]))
-const selectionWarnings = reactive(buildUploadMap(''))
 
 const fieldErrors = computed<Record<string, string>>(() => {
   const errors: Record<string, string> = {}
@@ -131,16 +87,6 @@ const canSubmit = computed(() => {
     !isSubmitting.value
   )
 })
-
-function buildUploadMap<T>(initialValue: T): Record<PhotoGroupName, T> {
-  return PHOTO_GROUPS.reduce(
-    (accumulator, group) => {
-      accumulator[group.name] = initialValue
-      return accumulator
-    },
-    {} as Record<PhotoGroupName, T>,
-  )
-}
 
 function createItemId(): string {
   if (globalThis.crypto && 'randomUUID' in globalThis.crypto) {
@@ -289,6 +235,8 @@ async function submitIntake(): Promise<void> {
   isSubmitting.value = true
   submitError.value = ''
   submitSuccess.value = ''
+  confirmationReady.value = false
+  generatedDownloadUrl.value = null
 
   try {
     if (!sessionId.value) {
@@ -322,18 +270,14 @@ async function submitIntake(): Promise<void> {
     }
 
     submitSuccess.value = `Draft saved and photos uploaded. Session ${sessionId.value}.`
+    confirmationReady.value = true
+    void router.push({ name: 'confirmation' })
   } catch (error) {
     submitError.value = normalizeErrorMessage(error)
   } finally {
     isSubmitting.value = false
   }
 }
-
-onBeforeUnmount(() => {
-  for (const group of PHOTO_GROUPS) {
-    releasePreviewUrls(uploads[group.name])
-  }
-})
 </script>
 
 <template>
@@ -535,9 +479,11 @@ onBeforeUnmount(() => {
 
       <footer class="form-actions">
         <button class="btn btn--primary" type="submit" :disabled="!canSubmit">
-          {{ isSubmitting ? 'Saving draft and uploading photos...' : 'Save Draft Intake' }}
+          {{ isSubmitting ? 'Saving draft and uploading photos...' : 'Continue to Confirmation' }}
         </button>
-        <p class="form-summary">Generate remains disabled until all required fields and photo groups are valid.</p>
+        <p class="form-summary">
+          Continue unlocks only when all required fields and photo groups are valid.
+        </p>
         <p v-if="submitError" class="form-summary form-summary--error">{{ submitError }}</p>
         <p v-if="submitSuccess" class="form-summary form-summary--success">{{ submitSuccess }}</p>
         <p v-if="sessionId" class="form-summary form-summary--mono">Session ID: {{ sessionId }}</p>

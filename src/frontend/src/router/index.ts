@@ -8,6 +8,11 @@ const router = createRouter({
       name: 'intake',
       component: () => import('@/screens/IntakeFormScreen.vue'),
     },
+    {
+      path: '/confirm',
+      name: 'confirmation',
+      component: () => import('@/screens/ConfirmationScreen.vue'),
+    },
   ],
 })
 

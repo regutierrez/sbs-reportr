@@ -98,3 +98,8 @@ export interface SessionStatusResponse {
 export interface ImageUploadResult {
   image: ImageMeta
 }
+
+export interface GenerateReportResponse {
+  session_id: string
+  download_url: string
+}
