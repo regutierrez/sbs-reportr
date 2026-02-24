@@ -15,6 +15,7 @@ from reportr.reporting import (
     ActivityReportPdfRenderer,
     RendererNotReadyError,
     UnconfiguredActivityReportPdfRenderer,
+    WeasyPrintActivityReportPdfRenderer,
 )
 from reportr.storage import (
     PHOTO_GROUP_LIMITS,
@@ -56,7 +57,7 @@ def create_app(
 ) -> FastAPI:
     app = FastAPI(title="SBS Reportr API", version="0.1.0")
     app.state.report_repository = repository or FileSystemReportRepository()
-    app.state.report_renderer = renderer or UnconfiguredActivityReportPdfRenderer()
+    app.state.report_renderer = renderer or _build_default_renderer(app.state.report_repository)
     app.state.render_semaphore = render_semaphore or asyncio.Semaphore(RENDER_CONCURRENCY_LIMIT)
 
     @app.exception_handler(SessionNotFoundError)
@@ -255,6 +256,13 @@ def _collect_missing_requirements(session: ReportSession) -> dict[str, list[str]
         missing["photo_groups"] = missing_photo_groups
 
     return missing
+
+
+def _build_default_renderer(repository: ReportRepository) -> ActivityReportPdfRenderer:
+    if isinstance(repository, FileSystemReportRepository):
+        return WeasyPrintActivityReportPdfRenderer(sessions_root=repository.sessions_root)
+
+    return UnconfiguredActivityReportPdfRenderer()
 
 
 app = create_app()

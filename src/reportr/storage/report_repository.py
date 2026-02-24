@@ -62,6 +62,14 @@ class FileSystemReportRepository(ReportRepository):
         self._sessions_root.mkdir(parents=True, exist_ok=True)
         self._reports_root.mkdir(parents=True, exist_ok=True)
 
+    @property
+    def sessions_root(self) -> Path:
+        return self._sessions_root
+
+    @property
+    def reports_root(self) -> Path:
+        return self._reports_root
+
     def create_session(self) -> ReportSession:
         session = ReportSession(id=uuid4())
         self._session_directory(session.id).mkdir(parents=True, exist_ok=False)
