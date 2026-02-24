@@ -30,6 +30,10 @@ const canContinue = computed(() => {
   return confirmationReady.value && !!sessionId.value && !isGenerating.value
 })
 
+const canRedownload = computed(() => {
+  return !!generatedDownloadUrl.value
+})
+
 onMounted(() => {
   if (!confirmationReady.value || !sessionId.value) {
     void router.replace({ name: 'intake' })
@@ -78,6 +82,14 @@ async function continueToGenerate(): Promise<void> {
   } finally {
     isGenerating.value = false
   }
+}
+
+function redownloadReport(): void {
+  if (!generatedDownloadUrl.value) {
+    return
+  }
+
+  window.open(resolveApiUrl(generatedDownloadUrl.value), '_blank', 'noopener')
 }
 
 function revertToForm(): void {
@@ -177,6 +189,14 @@ function revertToForm(): void {
         <p class="confirmation-actions__session">Session ID: {{ sessionId }}</p>
         <div class="confirmation-actions__buttons">
           <button class="btn btn--secondary" type="button" @click="revertToForm">Revert</button>
+          <button
+            class="btn btn--secondary"
+            type="button"
+            :disabled="!canRedownload"
+            @click="redownloadReport"
+          >
+            Download Again
+          </button>
           <button class="btn btn--primary" type="button" :disabled="!canContinue" @click="continueToGenerate">
             {{ isGenerating ? 'Generating...' : 'Continue and Generate PDF' }}
           </button>

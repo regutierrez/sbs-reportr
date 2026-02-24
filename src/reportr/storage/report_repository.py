@@ -50,6 +50,10 @@ class ReportRepository(ABC):
         """Update report session status."""
 
     @abstractmethod
+    def get_generated_pdf_path(self, session_id: UUID) -> Path | None:
+        """Return generated PDF path when available for download."""
+
+    @abstractmethod
     def cleanup_session_images(self, session_id: UUID) -> None:
         """Remove session image files after successful generation."""
 
@@ -155,6 +159,17 @@ class FileSystemReportRepository(ReportRepository):
         session.status = status
         self._write_session(session)
         return session
+
+    def get_generated_pdf_path(self, session_id: UUID) -> Path | None:
+        session = self._require_session(session_id)
+        if session.generated_pdf_path is None:
+            return None
+
+        report_path = Path(session.generated_pdf_path)
+        if not report_path.exists():
+            return None
+
+        return report_path
 
     def cleanup_session_images(self, session_id: UUID) -> None:
         self._require_session(session_id)

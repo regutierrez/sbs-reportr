@@ -9,7 +9,7 @@ from uuid import UUID
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
@@ -223,6 +223,22 @@ def create_app(
         return GenerateReportResponse(
             session_id=session_id,
             download_url=f"/reports/{session_id}/download",
+        )
+
+    @app.get("/reports/{session_id}/download", tags=["reports"])
+    async def download_report(session_id: UUID) -> FileResponse:
+        repository: ReportRepository = app.state.report_repository
+        pdf_path = repository.get_generated_pdf_path(session_id)
+        if pdf_path is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Generated report is not available for download.",
+            )
+
+        return FileResponse(
+            path=pdf_path,
+            media_type="application/pdf",
+            filename=f"activity-report-{session_id}.pdf",
         )
 
     return app

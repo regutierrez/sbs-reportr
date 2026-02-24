@@ -196,6 +196,15 @@ def test_generate_report_rejects_incomplete_session(tmp_path: Path) -> None:
     assert PhotoGroupName.BUILDING_DETAILS_BUILDING_PHOTO.value in detail["missing"]["photo_groups"]
 
 
+def test_download_report_returns_not_found_when_not_generated(tmp_path: Path) -> None:
+    client, _ = make_client(tmp_path)
+    session_id = create_complete_session(client)
+
+    response = client.get(f"/reports/{session_id}/download")
+
+    assert response.status_code == 404
+
+
 def test_generate_report_persists_pdf_after_validation(tmp_path: Path) -> None:
     renderer = StubRenderer(output=b"%PDF-1.7\nrendered")
     client, repository = make_client(tmp_path, renderer=renderer)
@@ -216,3 +225,11 @@ def test_generate_report_persists_pdf_after_validation(tmp_path: Path) -> None:
 
     images_root = tmp_path / "sessions" / str(session_id) / "images"
     assert not images_root.exists()
+
+    first_download = client.get(f"/reports/{session_id}/download")
+    second_download = client.get(f"/reports/{session_id}/download")
+
+    assert first_download.status_code == 200
+    assert second_download.status_code == 200
+    assert first_download.content == b"%PDF-1.7\nrendered"
+    assert second_download.content == b"%PDF-1.7\nrendered"

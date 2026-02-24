@@ -141,6 +141,16 @@ def test_persist_generated_pdf_writes_output_and_updates_status(tmp_path: Path) 
     assert loaded is not None
     assert loaded.status == ReportStatus.COMPLETED
     assert loaded.generated_pdf_path == report_path.as_posix()
+    assert repository.get_generated_pdf_path(session.id) == report_path
+
+
+def test_get_generated_pdf_path_returns_none_when_not_generated(tmp_path: Path) -> None:
+    repository = make_repository(tmp_path)
+    session = repository.create_session()
+
+    pdf_path = repository.get_generated_pdf_path(session.id)
+
+    assert pdf_path is None
 
 
 def test_set_status_updates_session_status(tmp_path: Path) -> None:
