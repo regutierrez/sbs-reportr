@@ -217,8 +217,7 @@ function revertToForm(): void {
 
 <style scoped>
 .confirmation-screen {
-  min-height: 100vh;
-  padding: 2rem 1rem 3rem;
+  padding: 0.75rem 1rem 3rem;
   background:
     radial-gradient(circle at 8% 5%, color-mix(in srgb, var(--navy) 10%, transparent), transparent 32%),
     linear-gradient(120deg, #edf3ff 0%, #f7f9fc 48%, #eef5ff 100%);
@@ -402,7 +401,7 @@ function revertToForm(): void {
 
 @media (max-width: 700px) {
   .confirmation-screen {
-    padding: 1rem 0.75rem 2rem;
+    padding: 0.3rem 0.75rem 2rem;
   }
 
   .confirmation-hero__title {

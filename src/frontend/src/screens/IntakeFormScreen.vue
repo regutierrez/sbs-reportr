@@ -88,6 +88,14 @@ const canSubmit = computed(() => {
   )
 })
 
+const photoGroupsByName = PHOTO_GROUPS.reduce(
+  (accumulator, group) => {
+    accumulator[group.name] = group
+    return accumulator
+  },
+  {} as Record<PhotoGroupName, PhotoGroupConfig>,
+)
+
 function createItemId(): string {
   if (globalThis.crypto && 'randomUUID' in globalThis.crypto) {
     return globalThis.crypto.randomUUID()
@@ -287,15 +295,15 @@ async function submitIntake(): Promise<void> {
         <p class="intake-hero__kicker">SBS Reportr</p>
         <h1 class="intake-hero__title">Activity Report Intake</h1>
         <p class="intake-hero__subtitle">
-          Complete every field and upload every required photo group before proceeding to generation.
+          Complete each section in report order before proceeding to confirmation.
         </p>
       </header>
 
       <section class="form-panel">
-        <SectionHeader title="Building Details" subtitle="Cover page and introduction values" />
+        <SectionHeader title="Building Details" subtitle="Cover page information" />
         <div class="field-grid">
           <label class="field">
-            <span class="field__label">Testing Date</span>
+            <span class="field__label">Testing Date (Month YYYY)</span>
             <input v-model="form.building_details.testing_date" class="field__input" type="month" />
             <span v-if="fieldErrors.testing_date" class="field__error">{{ fieldErrors.testing_date }}</span>
           </label>
@@ -327,13 +335,26 @@ async function submitIntake(): Promise<void> {
             <span v-if="fieldErrors.number_of_storey" class="field__error">{{ fieldErrors.number_of_storey }}</span>
           </label>
         </div>
+
+        <div class="upload-grid upload-grid--single">
+          <ImageUploadField
+            :label="photoGroupsByName.building_details_building_photo.label"
+            :section="photoGroupsByName.building_details_building_photo.section"
+            :min="photoGroupsByName.building_details_building_photo.min"
+            :max="photoGroupsByName.building_details_building_photo.max"
+            :items="uploads.building_details_building_photo"
+            :disabled="isSubmitting"
+            :error="photoGroupError(photoGroupsByName.building_details_building_photo)"
+            @select="(files) => onFilesSelected(photoGroupsByName.building_details_building_photo, files)"
+          />
+        </div>
       </section>
 
       <section class="form-panel">
-        <SectionHeader title="Superstructure" subtitle="B.1 to B.6 values" />
+        <SectionHeader title="Superstructure - Rebar Scanning Details" subtitle="B.1" />
         <div class="field-grid">
           <label class="field">
-            <span class="field__label">Rebar Scan Locations</span>
+            <span class="field__label">Number of rebar scan locations</span>
             <input
               v-model.number="form.superstructure.rebar_scanning.number_of_rebar_scan_locations"
               class="field__input"
@@ -344,9 +365,27 @@ async function submitIntake(): Promise<void> {
               {{ fieldErrors.number_of_rebar_scan_locations }}
             </span>
           </label>
+        </div>
 
+        <div class="upload-grid upload-grid--single">
+          <ImageUploadField
+            :label="photoGroupsByName.superstructure_rebar_scanning_photos.label"
+            :section="photoGroupsByName.superstructure_rebar_scanning_photos.section"
+            :min="photoGroupsByName.superstructure_rebar_scanning_photos.min"
+            :max="photoGroupsByName.superstructure_rebar_scanning_photos.max"
+            :items="uploads.superstructure_rebar_scanning_photos"
+            :disabled="isSubmitting"
+            :error="photoGroupError(photoGroupsByName.superstructure_rebar_scanning_photos)"
+            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_rebar_scanning_photos, files)"
+          />
+        </div>
+      </section>
+
+      <section class="form-panel">
+        <SectionHeader title="Superstructure - Rebound Hammer Test Details" subtitle="B.2" />
+        <div class="field-grid">
           <label class="field">
-            <span class="field__label">Rebound Hammer Test Locations</span>
+            <span class="field__label">Number of rebound hammer test locations</span>
             <input
               v-model.number="form.superstructure.rebound_hammer_test.number_of_rebound_hammer_test_locations"
               class="field__input"
@@ -357,9 +396,27 @@ async function submitIntake(): Promise<void> {
               {{ fieldErrors.number_of_rebound_hammer_test_locations }}
             </span>
           </label>
+        </div>
 
+        <div class="upload-grid upload-grid--single">
+          <ImageUploadField
+            :label="photoGroupsByName.superstructure_rebound_hammer_test_photos.label"
+            :section="photoGroupsByName.superstructure_rebound_hammer_test_photos.section"
+            :min="photoGroupsByName.superstructure_rebound_hammer_test_photos.min"
+            :max="photoGroupsByName.superstructure_rebound_hammer_test_photos.max"
+            :items="uploads.superstructure_rebound_hammer_test_photos"
+            :disabled="isSubmitting"
+            :error="photoGroupError(photoGroupsByName.superstructure_rebound_hammer_test_photos)"
+            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_rebound_hammer_test_photos, files)"
+          />
+        </div>
+      </section>
+
+      <section class="form-panel">
+        <SectionHeader title="Superstructure - Concrete Core Extraction Details" subtitle="B.3" />
+        <div class="field-grid">
           <label class="field">
-            <span class="field__label">Coring Locations</span>
+            <span class="field__label">Number of coring locations</span>
             <input
               v-model.number="form.superstructure.concrete_core_extraction.number_of_coring_locations"
               class="field__input"
@@ -370,9 +427,37 @@ async function submitIntake(): Promise<void> {
               {{ fieldErrors.number_of_coring_locations }}
             </span>
           </label>
+        </div>
 
+        <div class="upload-grid upload-grid--pair">
+          <ImageUploadField
+            :label="photoGroupsByName.superstructure_concrete_coring_photos.label"
+            :section="photoGroupsByName.superstructure_concrete_coring_photos.section"
+            :min="photoGroupsByName.superstructure_concrete_coring_photos.min"
+            :max="photoGroupsByName.superstructure_concrete_coring_photos.max"
+            :items="uploads.superstructure_concrete_coring_photos"
+            :disabled="isSubmitting"
+            :error="photoGroupError(photoGroupsByName.superstructure_concrete_coring_photos)"
+            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_concrete_coring_photos, files)"
+          />
+          <ImageUploadField
+            :label="photoGroupsByName.superstructure_core_samples_family_pic.label"
+            :section="photoGroupsByName.superstructure_core_samples_family_pic.section"
+            :min="photoGroupsByName.superstructure_core_samples_family_pic.min"
+            :max="photoGroupsByName.superstructure_core_samples_family_pic.max"
+            :items="uploads.superstructure_core_samples_family_pic"
+            :disabled="isSubmitting"
+            :error="photoGroupError(photoGroupsByName.superstructure_core_samples_family_pic)"
+            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_core_samples_family_pic, files)"
+          />
+        </div>
+      </section>
+
+      <section class="form-panel">
+        <SectionHeader title="Superstructure - Rebar Extraction Details" subtitle="B.4" />
+        <div class="field-grid">
           <label class="field">
-            <span class="field__label">Rebar Samples Extracted</span>
+            <span class="field__label">Number of rebar samples</span>
             <input
               v-model.number="form.superstructure.rebar_extraction.number_of_rebar_samples_extracted"
               class="field__input"
@@ -383,9 +468,53 @@ async function submitIntake(): Promise<void> {
               {{ fieldErrors.number_of_rebar_samples_extracted }}
             </span>
           </label>
+        </div>
 
+        <div class="upload-grid upload-grid--pair">
+          <ImageUploadField
+            :label="photoGroupsByName.superstructure_rebar_extraction_photos.label"
+            :section="photoGroupsByName.superstructure_rebar_extraction_photos.section"
+            :min="photoGroupsByName.superstructure_rebar_extraction_photos.min"
+            :max="photoGroupsByName.superstructure_rebar_extraction_photos.max"
+            :items="uploads.superstructure_rebar_extraction_photos"
+            :disabled="isSubmitting"
+            :error="photoGroupError(photoGroupsByName.superstructure_rebar_extraction_photos)"
+            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_rebar_extraction_photos, files)"
+          />
+          <ImageUploadField
+            :label="photoGroupsByName.superstructure_rebar_samples_family_pic.label"
+            :section="photoGroupsByName.superstructure_rebar_samples_family_pic.section"
+            :min="photoGroupsByName.superstructure_rebar_samples_family_pic.min"
+            :max="photoGroupsByName.superstructure_rebar_samples_family_pic.max"
+            :items="uploads.superstructure_rebar_samples_family_pic"
+            :disabled="isSubmitting"
+            :error="photoGroupError(photoGroupsByName.superstructure_rebar_samples_family_pic)"
+            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_rebar_samples_family_pic, files)"
+          />
+        </div>
+      </section>
+
+      <section class="form-panel">
+        <SectionHeader title="Superstructure - Chipping of Existing Slab Details" subtitle="B.5" />
+        <div class="upload-grid upload-grid--single">
+          <ImageUploadField
+            :label="photoGroupsByName.superstructure_chipping_of_slab_photos.label"
+            :section="photoGroupsByName.superstructure_chipping_of_slab_photos.section"
+            :min="photoGroupsByName.superstructure_chipping_of_slab_photos.min"
+            :max="photoGroupsByName.superstructure_chipping_of_slab_photos.max"
+            :items="uploads.superstructure_chipping_of_slab_photos"
+            :disabled="isSubmitting"
+            :error="photoGroupError(photoGroupsByName.superstructure_chipping_of_slab_photos)"
+            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_chipping_of_slab_photos, files)"
+          />
+        </div>
+      </section>
+
+      <section class="form-panel">
+        <SectionHeader title="Superstructure - Restoration Works Details" subtitle="B.6" />
+        <div class="field-grid">
           <label class="field">
-            <span class="field__label">Non-shrink Grout Product</span>
+            <span class="field__label">Non-shrink grout product used</span>
             <input
               v-model="form.superstructure.restoration_works.non_shrink_grout_product_used"
               class="field__input"
@@ -397,7 +526,7 @@ async function submitIntake(): Promise<void> {
           </label>
 
           <label class="field">
-            <span class="field__label">Epoxy A&B Product</span>
+            <span class="field__label">Epoxy A&amp;B used?</span>
             <input
               v-model="form.superstructure.restoration_works.epoxy_ab_used"
               class="field__input"
@@ -406,13 +535,26 @@ async function submitIntake(): Promise<void> {
             <span v-if="fieldErrors.epoxy_ab_used" class="field__error">{{ fieldErrors.epoxy_ab_used }}</span>
           </label>
         </div>
+
+        <div class="upload-grid upload-grid--single">
+          <ImageUploadField
+            :label="photoGroupsByName.superstructure_restoration_photos.label"
+            :section="photoGroupsByName.superstructure_restoration_photos.section"
+            :min="photoGroupsByName.superstructure_restoration_photos.min"
+            :max="photoGroupsByName.superstructure_restoration_photos.max"
+            :items="uploads.superstructure_restoration_photos"
+            :disabled="isSubmitting"
+            :error="photoGroupError(photoGroupsByName.superstructure_restoration_photos)"
+            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_restoration_photos, files)"
+          />
+        </div>
       </section>
 
       <section class="form-panel">
-        <SectionHeader title="Substructure and Signature" subtitle="C.1 values and sign-off" />
+        <SectionHeader title="Substructure - Concrete Core Extraction Details" subtitle="C.1" />
         <div class="field-grid">
           <label class="field">
-            <span class="field__label">Foundation Locations</span>
+            <span class="field__label">Number of selected foundation locations</span>
             <input
               v-model.number="form.substructure.concrete_core_extraction.number_of_foundation_locations"
               class="field__input"
@@ -425,7 +567,7 @@ async function submitIntake(): Promise<void> {
           </label>
 
           <label class="field">
-            <span class="field__label">Extracted Foundation Cores</span>
+            <span class="field__label">Number of extracted cores</span>
             <input
               v-model.number="form.substructure.concrete_core_extraction.number_of_foundation_cores_extracted"
               class="field__input"
@@ -436,45 +578,72 @@ async function submitIntake(): Promise<void> {
               {{ fieldErrors.number_of_foundation_cores_extracted }}
             </span>
           </label>
+        </div>
 
-          <label class="field">
-            <span class="field__label">Prepared By</span>
-            <input v-model="form.signature.prepared_by" class="field__input" maxlength="100" />
-            <span v-if="fieldErrors.prepared_by" class="field__error">{{ fieldErrors.prepared_by }}</span>
-          </label>
+        <div class="upload-grid upload-grid--single">
+          <ImageUploadField
+            :label="photoGroupsByName.substructure_coring_for_foundation_photos.label"
+            :section="photoGroupsByName.substructure_coring_for_foundation_photos.section"
+            :min="photoGroupsByName.substructure_coring_for_foundation_photos.min"
+            :max="photoGroupsByName.substructure_coring_for_foundation_photos.max"
+            :items="uploads.substructure_coring_for_foundation_photos"
+            :disabled="isSubmitting"
+            :error="photoGroupError(photoGroupsByName.substructure_coring_for_foundation_photos)"
+            @select="(files) => onFilesSelected(photoGroupsByName.substructure_coring_for_foundation_photos, files)"
+          />
+        </div>
+      </section>
 
-          <label class="field">
-            <span class="field__label">Role</span>
-            <input v-model="form.signature.prepared_by_role" class="field__input" maxlength="100" />
-            <span v-if="fieldErrors.prepared_by_role" class="field__error">{{ fieldErrors.prepared_by_role }}</span>
-          </label>
+      <section class="form-panel">
+        <SectionHeader title="Substructure - Rebar Scanning Details" subtitle="C.2" />
+        <div class="upload-grid upload-grid--single">
+          <ImageUploadField
+            :label="photoGroupsByName.substructure_rebar_scanning_for_foundation_photos.label"
+            :section="photoGroupsByName.substructure_rebar_scanning_for_foundation_photos.section"
+            :min="photoGroupsByName.substructure_rebar_scanning_for_foundation_photos.min"
+            :max="photoGroupsByName.substructure_rebar_scanning_for_foundation_photos.max"
+            :items="uploads.substructure_rebar_scanning_for_foundation_photos"
+            :disabled="isSubmitting"
+            :error="photoGroupError(photoGroupsByName.substructure_rebar_scanning_for_foundation_photos)"
+            @select="(files) => onFilesSelected(photoGroupsByName.substructure_rebar_scanning_for_foundation_photos, files)"
+          />
         </div>
       </section>
 
       <section class="form-panel">
         <SectionHeader
-          title="Photo Evidence"
-          subtitle="Images are resized to max 1000px longest side and uploaded as JPEG quality 75"
+          title="Substructure - Restoration for Coring Works, Backfilling, and Compaction Details"
+          subtitle="C.3"
         />
-
-        <div class="upload-grid">
+        <div class="upload-grid upload-grid--single">
           <ImageUploadField
-            v-for="group in PHOTO_GROUPS"
-            :key="group.name"
-            :label="group.label"
-            :section="group.section"
-            :min="group.min"
-            :max="group.max"
-            :items="uploads[group.name]"
+            :label="photoGroupsByName.substructure_restoration_backfilling_compaction_photos.label"
+            :section="photoGroupsByName.substructure_restoration_backfilling_compaction_photos.section"
+            :min="photoGroupsByName.substructure_restoration_backfilling_compaction_photos.min"
+            :max="photoGroupsByName.substructure_restoration_backfilling_compaction_photos.max"
+            :items="uploads.substructure_restoration_backfilling_compaction_photos"
             :disabled="isSubmitting"
-            :error="photoGroupError(group)"
-            @select="(files) => onFilesSelected(group, files)"
+            :error="photoGroupError(photoGroupsByName.substructure_restoration_backfilling_compaction_photos)"
+            @select="(files) => onFilesSelected(photoGroupsByName.substructure_restoration_backfilling_compaction_photos, files)"
           />
         </div>
+      </section>
 
-        <p v-if="missingPhotoGroupLabels.length > 0" class="form-summary form-summary--warning">
-          Missing photo groups: {{ missingPhotoGroupLabels.join(', ') }}
-        </p>
+      <section class="form-panel">
+        <SectionHeader title="Signature" subtitle="Prepared by" />
+        <div class="field-grid field-grid--signature">
+          <label class="field">
+            <span class="field__label">Prepared by</span>
+            <input v-model="form.signature.prepared_by" class="field__input" maxlength="100" />
+            <span v-if="fieldErrors.prepared_by" class="field__error">{{ fieldErrors.prepared_by }}</span>
+          </label>
+
+          <label class="field">
+            <span class="field__label">Prepared by role</span>
+            <input v-model="form.signature.prepared_by_role" class="field__input" maxlength="100" />
+            <span v-if="fieldErrors.prepared_by_role" class="field__error">{{ fieldErrors.prepared_by_role }}</span>
+          </label>
+        </div>
       </section>
 
       <footer class="form-actions">
@@ -494,8 +663,7 @@ async function submitIntake(): Promise<void> {
 
 <style scoped>
 .intake-screen {
-  min-height: 100vh;
-  padding: 2.5rem 1rem 4rem;
+  padding: 0.3rem 1rem 3rem;
   background:
     radial-gradient(circle at top right, color-mix(in srgb, var(--orange) 16%, transparent), transparent 35%),
     linear-gradient(150deg, #f0f3fb 0%, #f7f9fc 45%, #eef5ff 100%);
@@ -509,7 +677,7 @@ async function submitIntake(): Promise<void> {
 }
 
 .intake-hero {
-  padding: 1.5rem;
+  padding: 1.15rem;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--paper);
@@ -525,7 +693,7 @@ async function submitIntake(): Promise<void> {
 
 .intake-hero__title {
   margin: 0.2rem 0 0.45rem;
-  font: 700 2rem/1.1 var(--font-display);
+  font: 700 1.75rem/1.1 var(--font-display);
   color: var(--navy);
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -537,7 +705,9 @@ async function submitIntake(): Promise<void> {
 }
 
 .form-panel {
-  padding: 1.1rem;
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--paper);
@@ -547,6 +717,10 @@ async function submitIntake(): Promise<void> {
   display: grid;
   gap: 0.85rem;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.field-grid--signature {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 .field {
@@ -591,6 +765,13 @@ async function submitIntake(): Promise<void> {
 .upload-grid {
   display: grid;
   gap: 0.75rem;
+}
+
+.upload-grid--single {
+  grid-template-columns: minmax(260px, 420px);
+}
+
+.upload-grid--pair {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
@@ -646,11 +827,15 @@ async function submitIntake(): Promise<void> {
 
 @media (max-width: 700px) {
   .intake-screen {
-    padding: 1rem 0.75rem 2rem;
+    padding: 0.3rem 0.75rem 2rem;
   }
 
   .intake-hero__title {
-    font-size: 1.7rem;
+    font-size: 1.55rem;
+  }
+
+  .upload-grid--single {
+    grid-template-columns: 1fr;
   }
 }
 </style>
