@@ -1,0 +1,19 @@
+{
+  "name": "sbs-reportr",
+  "private": true,
+  "scripts": {
+    "format": "uv run ruff format . && bun run --cwd src/frontend format",
+    "lint": "bun run lint:backend && bun run lint:frontend",
+    "lint:backend": "uv run ruff check .",
+    "lint:frontend": "bun run --cwd src/frontend lint",
+    "typecheck": "bun run typecheck:backend && bun run typecheck:frontend",
+    "typecheck:backend": "uv run basedpyright",
+    "typecheck:frontend": "bun run --cwd src/frontend type-check",
+    "lsp": "bun run typecheck",
+    "test": "bun run test:backend && bun run test:frontend",
+    "test:backend": "uv run pytest",
+    "test:frontend": "bun run --cwd src/frontend test:unit --run",
+    "build": "bun run --cwd src/frontend build",
+    "check": "bun run lint && bun run typecheck && bun run build"
+  }
+}
