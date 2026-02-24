@@ -20,6 +20,7 @@ Build a Vue + FastAPI reporting app that captures project intake details and pho
 - Frontend scaffolding starts with `bun create vue@latest`.
 - No placeholder PDF phase; implement the full template renderer directly.
 - Image compression is mandatory.
+- Form and photo models use **section + subsection** namespaces (for example: `superstructure.rebar_scanning`, `substructure.rebar_scanning`).
 
 ## Reference Assets
 - Expected canonical template file path:
@@ -56,80 +57,90 @@ Build a Vue + FastAPI reporting app that captures project intake details and pho
 ### Mapping of Form Values to Resulting PDF
 
 #### Text/number mapping
-- `testing_date` => cover page `MONTH YYYY` display
-- `building_name` => cover page title + introduction mentions
-- `building_location` => introduction location mention
-- `number_of_storey` => introduction building descriptor
-- `number_of_rebar_scan_locations` => section `B.1` count
-- `number_of_rebound_hammer_test_locations` => section `B.2` count
-- `number_of_coring_locations` => section `B.3` count
-- `number_of_rebar_samples_extracted` => section `B.4` count
-- `non_shrink_grout_product_used` => section `B.6` product mention
-- `epoxy_ab_used` => section `B.6` adhesive/epoxy mention
-- `number_of_foundation_locations` => section `C.1` location count
-- `number_of_foundation_cores_extracted` => section `C.1` core count
-- `prepared_by` => final page signature name
-- `prepared_by_role` => final page signature role
+- `building_details.testing_date` => cover page `MONTH YYYY` display
+- `building_details.building_name` => cover page title + introduction mentions
+- `building_details.building_location` => introduction location mention
+- `building_details.number_of_storey` => introduction building descriptor
+- `superstructure.rebar_scanning.number_of_rebar_scan_locations` => section `B.1` count
+- `superstructure.rebound_hammer_test.number_of_rebound_hammer_test_locations` => section `B.2` count
+- `superstructure.concrete_core_extraction.number_of_coring_locations` => section `B.3` count
+- `superstructure.rebar_extraction.number_of_rebar_samples_extracted` => section `B.4` count
+- `superstructure.restoration_works.non_shrink_grout_product_used` => section `B.6` product mention
+- `superstructure.restoration_works.epoxy_ab_used` => section `B.6` adhesive/epoxy mention
+- `substructure.concrete_core_extraction.number_of_foundation_locations` => section `C.1` location count
+- `substructure.concrete_core_extraction.number_of_foundation_cores_extracted` => section `C.1` core count
+- `signature.prepared_by` => final page signature name
+- `signature.prepared_by_role` => final page signature role
 
 #### Photo mapping
-- `building_photo` => cover page hero + intro page building image
-- `rebar_scanning_photos` => `Figure B.1`
-- `rebound_hammer_testing_photos` => `Figure B.2`
-- `concrete_coring_photos` => `Figure B.3.1`
-- `core_samples_family_pic` => `Figure B.3.2`
-- `rebar_extraction_photos` => `Figure B.4.1`
-- `rebar_samples_family_pic` => `Figure B.4.2`
-- `chipping_of_slab_photos` => `Figure B.5`
-- `restoration_photos` => `Figure B.6`
-- `coring_for_foundation_photos` => `Figure C.1`
-- `rebar_scanning_for_foundation_photos` => `Figure C.2`
-- `restoration_backfilling_compaction_photos` => `Figure C.3`
+- `building_details.building_photo` => cover page hero + intro page building image
+- `superstructure.rebar_scanning.photos` => `Figure B.1`
+- `superstructure.rebound_hammer_test.photos` => `Figure B.2`
+- `superstructure.concrete_core_extraction.concrete_coring_photos` => `Figure B.3.1`
+- `superstructure.concrete_core_extraction.core_samples_family_pic` => `Figure B.3.2`
+- `superstructure.rebar_extraction.rebar_extraction_photos` => `Figure B.4.1`
+- `superstructure.rebar_extraction.rebar_samples_family_pic` => `Figure B.4.2`
+- `superstructure.chipping_existing_slab.photos` => `Figure B.5`
+- `superstructure.restoration_works.photos` => `Figure B.6`
+- `substructure.concrete_core_extraction.coring_for_foundation_photos` => `Figure C.1`
+- `substructure.rebar_scanning.photos` => `Figure C.2`
+- `substructure.restoration_backfilling_compaction.photos` => `Figure C.3`
 
 ## Form Schema (Required)
 
-### Inputs
-- `testing_date` (month picker)
-- `building_name` (max 200 chars)
-- `building_location` (max 500 chars)
-- `number_of_storey` (int, min 1)
-- `number_of_rebar_scan_locations` (int, min 1)
-- `number_of_rebound_hammer_test_locations` (int, min 1)
-- `number_of_coring_locations` (int, min 1)
-- `number_of_rebar_samples_extracted` (int, min 1)
-- `non_shrink_grout_product_used` (max 200 chars)
-- `epoxy_ab_used` (max 200 chars)
-- `number_of_foundation_locations` (int, min 1)
-- `number_of_foundation_cores_extracted` (int, min 1)
-- `prepared_by` (max 100 chars)
-- `prepared_by_role` (max 100 chars)
+### Inputs (section + subsection)
+- `building_details.testing_date` (month picker)
+- `building_details.building_name` (max 200 chars)
+- `building_details.building_location` (max 500 chars)
+- `building_details.number_of_storey` (int, min 1)
+- `superstructure.rebar_scanning.number_of_rebar_scan_locations` (int, min 1)
+- `superstructure.rebound_hammer_test.number_of_rebound_hammer_test_locations` (int, min 1)
+- `superstructure.concrete_core_extraction.number_of_coring_locations` (int, min 1)
+- `superstructure.rebar_extraction.number_of_rebar_samples_extracted` (int, min 1)
+- `superstructure.restoration_works.non_shrink_grout_product_used` (max 200 chars)
+- `superstructure.restoration_works.epoxy_ab_used` (max 200 chars)
+- `substructure.concrete_core_extraction.number_of_foundation_locations` (int, min 1)
+- `substructure.concrete_core_extraction.number_of_foundation_cores_extracted` (int, min 1)
+- `signature.prepared_by` (max 100 chars)
+- `signature.prepared_by_role` (max 100 chars)
 
-### Photos and limits (all required, min 1)
-- `building_photo` (min 1, max 1)
-- `rebar_scanning_photos` (min 1, max 5)
-- `rebound_hammer_testing_photos` (min 1, max 5)
-- `concrete_coring_photos` (min 1, max 5)
-- `core_samples_family_pic` (min 1, max 2)
-- `rebar_extraction_photos` (min 1, max 5)
-- `rebar_samples_family_pic` (min 1, max 2)
-- `chipping_of_slab_photos` (min 1, max 2)
-- `restoration_photos` (min 1, max 5)
-- `coring_for_foundation_photos` (min 1, max 3)
-- `rebar_scanning_for_foundation_photos` (min 1, max 3)
-- `restoration_backfilling_compaction_photos` (min 1, max 5)
+### Photos and limits (all required, min 1; section + subsection)
+- `building_details.building_photo` (min 1, max 1)
+- `superstructure.rebar_scanning.photos` (min 1, max 5)
+- `superstructure.rebound_hammer_test.photos` (min 1, max 5)
+- `superstructure.concrete_core_extraction.concrete_coring_photos` (min 1, max 5)
+- `superstructure.concrete_core_extraction.core_samples_family_pic` (min 1, max 2)
+- `superstructure.rebar_extraction.rebar_extraction_photos` (min 1, max 5)
+- `superstructure.rebar_extraction.rebar_samples_family_pic` (min 1, max 2)
+- `superstructure.chipping_existing_slab.photos` (min 1, max 2)
+- `superstructure.restoration_works.photos` (min 1, max 5)
+- `substructure.concrete_core_extraction.coring_for_foundation_photos` (min 1, max 3)
+- `substructure.rebar_scanning.photos` (min 1, max 3)
+- `substructure.restoration_backfilling_compaction.photos` (min 1, max 5)
 
 ## Data Models
 
 ### Backend (Pydantic)
 - `ReportSession` — session metadata: `id` (UUID4), `created_at` (datetime), `status` (enum: `draft`, `generating`, `completed`), `form_fields` (optional `ReportFormFields`).
-- `ReportFormFields` — all text/number inputs from the form schema. Used as the request body for `PUT /reports/{session_id}` and stored as session state.
-- `ImageMeta` — per-image metadata: `id` (UUID4), `group_name` (str), `original_filename` (str), `stored_filename` (str, e.g. `{uuid}.jpg`), `size_bytes` (int), `width` (int), `height` (int).
+- `ReportFormFields` — nested section/subsection object used as the request body for `PUT /reports/{session_id}` and stored as session state:
+  - `building_details`
+  - `superstructure.rebar_scanning`
+  - `superstructure.rebound_hammer_test`
+  - `superstructure.concrete_core_extraction`
+  - `superstructure.rebar_extraction`
+  - `superstructure.restoration_works`
+  - `substructure.concrete_core_extraction`
+  - `signature`
+- `PhotoGroupName` — enum-style identifier for upload groups, namespaced by section/subsection (e.g. `superstructure_rebar_scanning_photos`, `substructure_rebar_scanning_for_foundation_photos`).
+- `ImageMeta` — per-image metadata: `id` (UUID4), `group_name` (`PhotoGroupName`), `original_filename` (str), `stored_filename` (str, e.g. `{uuid}.jpg`), `size_bytes` (int), `width` (int), `height` (int).
 - `ImageUploadResponse` — returned by the image upload endpoint: `image` (ImageMeta).
 - `SessionStatusResponse` — returned by `POST /reports`: `session_id` (UUID4), `status` (str).
 - `GenerateReportResponse` — returned by the generate endpoint: `session_id` (UUID4), `download_url` (str).
 
 ### Frontend (TypeScript)
 - `ReportSession` — mirrors backend `ReportSession`.
-- `ReportFormFields` — mirrors backend `ReportFormFields`. Used as form state and request body.
+- `ReportFormFields` — mirrors backend nested section/subsection `ReportFormFields`. Used as form state and request body.
+- `PhotoGroupName` — mirrors backend photo-group identifier set.
 - `ImageMeta` — mirrors backend `ImageMeta`. Used to track uploaded images per group.
 - `ImageUploadResult` — mirrors backend `ImageUploadResponse`.
 - `PhotoGroup` — UI helper: `name` (string), `label` (string), `min` (number), `max` (number), `images` (ImageMeta[]).
@@ -141,7 +152,7 @@ Build a Vue + FastAPI reporting app that captures project intake details and pho
 - API:
   - `POST /reports` — create an empty report session, returns `session_id` (UUID4).
   - `PUT /reports/{session_id}` — submit or update text form fields for the session.
-  - `POST /reports/{session_id}/images/{group_name}` — upload a single image to a photo group (e.g. `rebar_scanning_photos`); streamed to disk. For groups requiring multiple images, the frontend fires parallel requests and tracks per-image upload progress.
+  - `POST /reports/{session_id}/images/{group_name}` — upload a single image to a photo group (e.g. `superstructure_rebar_scanning_photos`); streamed to disk. For groups requiring multiple images, the frontend fires parallel requests and tracks per-image upload progress.
   - `POST /reports/{session_id}/generate` — validate completeness, render PDF, persist output, return download.
 - Identifiers:
   - Session IDs: UUID4. Not guessable, collision-safe.
@@ -162,7 +173,7 @@ Build a Vue + FastAPI reporting app that captures project intake details and pho
 - Create `src/reportr/app/web_api.py` with session-based endpoints:
   - `POST /reports` — create empty session, returns `session_id`.
   - `PUT /reports/{session_id}` — submit or update text form fields.
-  - `POST /reports/{session_id}/images/{group_name}` — accept a single image per request; stream to session directory; validate MIME type and dimensions with Pillow on save. Frontend fires parallel requests for multi-image groups.
+  - `POST /reports/{session_id}/images/{group_name}` — accept a single image per request for a section/subsection namespaced photo group; stream to session directory; validate MIME type and dimensions with Pillow on save. Frontend fires parallel requests for multi-image groups.
   - `POST /reports/{session_id}/generate` — validate all required fields and photo groups are present, acquire render semaphore, render PDF, persist to output directory, return download.
 - Guard PDF generation with `asyncio.Semaphore(3)` to limit concurrent renders.
 - Implement a **storage repository layer** (`src/reportr/storage/report_repository.py`):
