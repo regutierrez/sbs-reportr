@@ -13,6 +13,7 @@
     "test": "bun run test:backend && bun run test:frontend",
     "test:backend": "uv run pytest",
     "test:frontend": "bun run --cwd src/frontend test:unit --run",
+    "test:e2e": "bun run --cwd src/frontend test:e2e",
     "build": "bun run --cwd src/frontend build",
     "check": "bun run lint && bun run typecheck && bun run build && bun run test"
   }

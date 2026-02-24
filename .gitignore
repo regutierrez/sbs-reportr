@@ -15,3 +15,6 @@ src/frontend/coverage/
 # OS/editor
 .DS_Store
 .agents/
+data/dummy_sessions**
+extracted_images/
+dummy_report.pdf
