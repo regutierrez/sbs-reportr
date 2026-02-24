@@ -18,7 +18,7 @@ const currentYear = new Date().getFullYear()
     <footer class="app-footer">
       <span class="app-footer__brand">
         <img src="/asset-79.svg" alt="" class="app-footer__icon" />
-        <span>STRUC</span>
+        <span>SBTRUC</span>
       </span>
       <span class="app-footer__copy">&copy; {{ currentYear }} SBSTRUC</span>
     </footer>
@@ -36,9 +36,7 @@ const currentYear = new Date().getFullYear()
   display: grid;
   place-items: center;
   gap: 0.2rem;
-  padding: 1.15rem 1rem 0.5rem;
-  background: linear-gradient(180deg, #f7f9fc 0%, #eef3fb 100%);
-  border-bottom: 1px solid var(--line);
+  padding: 1.15rem 1rem 0.35rem;
 }
 
 .app-header__logo {

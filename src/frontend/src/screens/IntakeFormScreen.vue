@@ -300,7 +300,7 @@ async function submitIntake(): Promise<void> {
       </header>
 
       <section class="form-panel">
-        <SectionHeader title="Building Details" subtitle="Cover page information" />
+        <SectionHeader title="Building Details - Cover page information" />
         <div class="field-grid">
           <label class="field">
             <span class="field__label">Testing Date (Month YYYY)</span>
@@ -351,7 +351,7 @@ async function submitIntake(): Promise<void> {
       </section>
 
       <section class="form-panel">
-        <SectionHeader title="Superstructure - Rebar Scanning Details" subtitle="B.1" />
+        <SectionHeader title="B.1 Superstructure - Rebar Scanning Details" />
         <div class="field-grid">
           <label class="field">
             <span class="field__label">Number of rebar scan locations</span>
@@ -382,7 +382,7 @@ async function submitIntake(): Promise<void> {
       </section>
 
       <section class="form-panel">
-        <SectionHeader title="Superstructure - Rebound Hammer Test Details" subtitle="B.2" />
+        <SectionHeader title="B.2 Superstructure - Rebound Hammer Test Details" />
         <div class="field-grid">
           <label class="field">
             <span class="field__label">Number of rebound hammer test locations</span>
@@ -413,7 +413,7 @@ async function submitIntake(): Promise<void> {
       </section>
 
       <section class="form-panel">
-        <SectionHeader title="Superstructure - Concrete Core Extraction Details" subtitle="B.3" />
+        <SectionHeader title="B.3 Superstructure - Concrete Core Extraction Details" />
         <div class="field-grid">
           <label class="field">
             <span class="field__label">Number of coring locations</span>
@@ -454,7 +454,7 @@ async function submitIntake(): Promise<void> {
       </section>
 
       <section class="form-panel">
-        <SectionHeader title="Superstructure - Rebar Extraction Details" subtitle="B.4" />
+        <SectionHeader title="B.4 Superstructure - Rebar Extraction Details" />
         <div class="field-grid">
           <label class="field">
             <span class="field__label">Number of rebar samples</span>
@@ -495,7 +495,7 @@ async function submitIntake(): Promise<void> {
       </section>
 
       <section class="form-panel">
-        <SectionHeader title="Superstructure - Chipping of Existing Slab Details" subtitle="B.5" />
+        <SectionHeader title="B.5 Superstructure - Chipping of Existing Slab Details" />
         <div class="upload-grid upload-grid--single">
           <ImageUploadField
             :label="photoGroupsByName.superstructure_chipping_of_slab_photos.label"
@@ -511,7 +511,7 @@ async function submitIntake(): Promise<void> {
       </section>
 
       <section class="form-panel">
-        <SectionHeader title="Superstructure - Restoration Works Details" subtitle="B.6" />
+        <SectionHeader title="B.6 Superstructure - Restoration Works Details" />
         <div class="field-grid">
           <label class="field">
             <span class="field__label">Non-shrink grout product used</span>
@@ -551,7 +551,7 @@ async function submitIntake(): Promise<void> {
       </section>
 
       <section class="form-panel">
-        <SectionHeader title="Substructure - Concrete Core Extraction Details" subtitle="C.1" />
+        <SectionHeader title="C.1 Substructure - Concrete Core Extraction Details" />
         <div class="field-grid">
           <label class="field">
             <span class="field__label">Number of selected foundation locations</span>
@@ -595,7 +595,7 @@ async function submitIntake(): Promise<void> {
       </section>
 
       <section class="form-panel">
-        <SectionHeader title="Substructure - Rebar Scanning Details" subtitle="C.2" />
+        <SectionHeader title="C.2 Substructure - Rebar Scanning Details" />
         <div class="upload-grid upload-grid--single">
           <ImageUploadField
             :label="photoGroupsByName.substructure_rebar_scanning_for_foundation_photos.label"
@@ -611,10 +611,7 @@ async function submitIntake(): Promise<void> {
       </section>
 
       <section class="form-panel">
-        <SectionHeader
-          title="Substructure - Restoration for Coring Works, Backfilling, and Compaction Details"
-          subtitle="C.3"
-        />
+        <SectionHeader title="C.3 Substructure - Restoration for Coring Works, Backfilling, and Compaction Details" />
         <div class="upload-grid upload-grid--single">
           <ImageUploadField
             :label="photoGroupsByName.substructure_restoration_backfilling_compaction_photos.label"
@@ -630,7 +627,7 @@ async function submitIntake(): Promise<void> {
       </section>
 
       <section class="form-panel">
-        <SectionHeader title="Signature" subtitle="Prepared by" />
+        <SectionHeader title="Signature - Prepared by" />
         <div class="field-grid field-grid--signature">
           <label class="field">
             <span class="field__label">Prepared by</span>
@@ -663,10 +660,7 @@ async function submitIntake(): Promise<void> {
 
 <style scoped>
 .intake-screen {
-  padding: 0.3rem 1rem 3rem;
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--orange) 16%, transparent), transparent 35%),
-    linear-gradient(150deg, #f0f3fb 0%, #f7f9fc 45%, #eef5ff 100%);
+  padding: 0 1rem 3rem;
 }
 
 .intake-form {
@@ -827,7 +821,7 @@ async function submitIntake(): Promise<void> {
 
 @media (max-width: 700px) {
   .intake-screen {
-    padding: 0.3rem 0.75rem 2rem;
+    padding: 0 0.75rem 2rem;
   }
 
   .intake-hero__title {
