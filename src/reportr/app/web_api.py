@@ -1,6 +1,8 @@
 # pyright: reportUnusedFunction=false
 
 import asyncio
+from contextlib import asynccontextmanager, suppress
+from datetime import timedelta
 from os import SEEK_END
 from typing import BinaryIO
 from uuid import UUID
@@ -33,6 +35,8 @@ MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024
 MAX_SESSION_SIZE_BYTES = 300 * 1024 * 1024
 MAX_IMAGE_LONGEST_SIDE = 1200
 RENDER_CONCURRENCY_LIMIT = 3
+ABANDONED_SESSION_TTL_SECONDS = 24 * 60 * 60
+SESSION_CLEANUP_INTERVAL_SECONDS = 30 * 60
 ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
@@ -54,8 +58,32 @@ def create_app(
     repository: ReportRepository | None = None,
     renderer: ActivityReportPdfRenderer | None = None,
     render_semaphore: asyncio.Semaphore | None = None,
+    session_ttl_seconds: int = ABANDONED_SESSION_TTL_SECONDS,
+    cleanup_interval_seconds: int = SESSION_CLEANUP_INTERVAL_SECONDS,
 ) -> FastAPI:
-    app = FastAPI(title="SBS Reportr API", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        app.state.cleanup_task = None
+
+        if session_ttl_seconds > 0 and cleanup_interval_seconds > 0:
+            app.state.cleanup_task = asyncio.create_task(
+                _run_session_cleanup_loop(
+                    repository=app.state.report_repository,
+                    session_ttl_seconds=session_ttl_seconds,
+                    cleanup_interval_seconds=cleanup_interval_seconds,
+                )
+            )
+
+        try:
+            yield
+        finally:
+            cleanup_task: asyncio.Task[None] | None = app.state.cleanup_task
+            if cleanup_task is not None:
+                cleanup_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await cleanup_task
+
+    app = FastAPI(title="SBS Reportr API", version="0.1.0", lifespan=lifespan)
     app.state.report_repository = repository or FileSystemReportRepository()
     app.state.report_renderer = renderer or _build_default_renderer(app.state.report_repository)
     app.state.render_semaphore = render_semaphore or asyncio.Semaphore(RENDER_CONCURRENCY_LIMIT)
@@ -190,6 +218,7 @@ def create_app(
                 )
 
             repository.persist_generated_pdf(session_id, pdf_bytes)
+            repository.cleanup_session_images(session_id)
 
         return GenerateReportResponse(
             session_id=session_id,
@@ -263,6 +292,19 @@ def _build_default_renderer(repository: ReportRepository) -> ActivityReportPdfRe
         return WeasyPrintActivityReportPdfRenderer(sessions_root=repository.sessions_root)
 
     return UnconfiguredActivityReportPdfRenderer()
+
+
+async def _run_session_cleanup_loop(
+    *,
+    repository: ReportRepository,
+    session_ttl_seconds: int,
+    cleanup_interval_seconds: int,
+) -> None:
+    max_age = timedelta(seconds=session_ttl_seconds)
+
+    while True:
+        repository.cleanup_expired_sessions(max_age=max_age)
+        await asyncio.sleep(cleanup_interval_seconds)
 
 
 app = create_app()

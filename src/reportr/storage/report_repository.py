@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from shutil import copyfileobj
+from shutil import copyfileobj, rmtree
 from typing import BinaryIO
 from uuid import UUID, uuid4
 
@@ -47,6 +48,14 @@ class ReportRepository(ABC):
     @abstractmethod
     def set_status(self, session_id: UUID, status: ReportStatus) -> ReportSession:
         """Update report session status."""
+
+    @abstractmethod
+    def cleanup_session_images(self, session_id: UUID) -> None:
+        """Remove session image files after successful generation."""
+
+    @abstractmethod
+    def cleanup_expired_sessions(self, max_age: timedelta) -> int:
+        """Delete abandoned sessions older than max_age and return removed count."""
 
 
 class FileSystemReportRepository(ReportRepository):
@@ -146,6 +155,44 @@ class FileSystemReportRepository(ReportRepository):
         session.status = status
         self._write_session(session)
         return session
+
+    def cleanup_session_images(self, session_id: UUID) -> None:
+        self._require_session(session_id)
+
+        image_root = self._images_directory(session_id)
+        if image_root.exists():
+            rmtree(image_root)
+
+    def cleanup_expired_sessions(self, max_age: timedelta) -> int:
+        now = datetime.now(timezone.utc)
+        cutoff = now - max_age
+        removed = 0
+
+        for session_dir in self._sessions_root.iterdir():
+            if not session_dir.is_dir():
+                continue
+
+            metadata_path = session_dir / "session.json"
+            if not metadata_path.exists():
+                continue
+
+            try:
+                session = ReportSession.model_validate_json(
+                    metadata_path.read_text(encoding="utf-8")
+                )
+            except Exception:
+                continue
+
+            if session.status == ReportStatus.COMPLETED:
+                continue
+
+            if session.created_at > cutoff:
+                continue
+
+            rmtree(session_dir, ignore_errors=True)
+            removed += 1
+
+        return removed
 
     def _require_session(self, session_id: UUID) -> ReportSession:
         session = self.get_session(session_id)

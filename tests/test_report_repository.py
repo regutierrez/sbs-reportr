@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -8,6 +9,7 @@ from reportr.storage import (
     FileSystemReportRepository,
     PhotoGroupName,
     ReportFormFields,
+    ReportSession,
     ReportStatus,
     SessionNotFoundError,
 )
@@ -59,6 +61,15 @@ def make_repository(tmp_path: Path) -> FileSystemReportRepository:
         sessions_root=tmp_path / "sessions",
         reports_root=tmp_path / "reports",
     )
+
+
+def write_session_metadata(
+    *,
+    tmp_path: Path,
+    session: ReportSession,
+) -> None:
+    metadata_path = tmp_path / "sessions" / str(session.id) / "session.json"
+    metadata_path.write_text(session.model_dump_json(indent=2), encoding="utf-8")
 
 
 def test_create_session_persists_metadata(tmp_path: Path) -> None:
@@ -139,6 +150,51 @@ def test_set_status_updates_session_status(tmp_path: Path) -> None:
     updated = repository.set_status(session.id, ReportStatus.GENERATING)
 
     assert updated.status == ReportStatus.GENERATING
+
+
+def test_cleanup_session_images_removes_session_image_directory(tmp_path: Path) -> None:
+    repository = make_repository(tmp_path)
+    session = repository.create_session()
+
+    repository.save_image(
+        session.id,
+        group_name=PhotoGroupName.BUILDING_DETAILS_BUILDING_PHOTO,
+        source=BytesIO(b"compressed image bytes"),
+        original_filename="building.jpg",
+        size_bytes=22,
+        width=1000,
+        height=750,
+    )
+
+    repository.cleanup_session_images(session.id)
+
+    images_root = tmp_path / "sessions" / str(session.id) / "images"
+    assert not images_root.exists()
+
+
+def test_cleanup_expired_sessions_removes_abandoned_drafts_only(tmp_path: Path) -> None:
+    repository = make_repository(tmp_path)
+    old_cutoff = datetime.now(timezone.utc) - timedelta(days=2)
+
+    old_draft = repository.create_session()
+    old_draft.created_at = old_cutoff
+    write_session_metadata(tmp_path=tmp_path, session=old_draft)
+
+    old_completed = repository.create_session()
+    repository.persist_generated_pdf(old_completed.id, b"%PDF-1.7")
+    completed_session = repository.get_session(old_completed.id)
+    assert completed_session is not None
+    completed_session.created_at = old_cutoff
+    write_session_metadata(tmp_path=tmp_path, session=completed_session)
+
+    fresh_draft = repository.create_session()
+
+    removed = repository.cleanup_expired_sessions(max_age=timedelta(days=1))
+
+    assert removed == 1
+    assert repository.get_session(old_draft.id) is None
+    assert repository.get_session(old_completed.id) is not None
+    assert repository.get_session(fresh_draft.id) is not None
 
 
 def test_missing_session_raises_for_mutations(tmp_path: Path) -> None:

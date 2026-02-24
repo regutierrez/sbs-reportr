@@ -73,7 +73,7 @@ def make_client(
         sessions_root=tmp_path / "sessions",
         reports_root=tmp_path / "reports",
     )
-    app = create_app(repository=repository, renderer=renderer)
+    app = create_app(repository=repository, renderer=renderer, cleanup_interval_seconds=0)
     return TestClient(app), repository
 
 
@@ -213,3 +213,6 @@ def test_generate_report_persists_pdf_after_validation(tmp_path: Path) -> None:
     assert stored_session.status == ReportStatus.COMPLETED
     assert stored_session.generated_pdf_path is not None
     assert Path(stored_session.generated_pdf_path).read_bytes() == b"%PDF-1.7\nrendered"
+
+    images_root = tmp_path / "sessions" / str(session_id) / "images"
+    assert not images_root.exists()
