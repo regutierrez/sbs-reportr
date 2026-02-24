@@ -96,7 +96,10 @@ def test_renderer_uses_file_uris_and_dynamic_content(
     output = renderer.render(session)
 
     assert output.startswith(b"%PDF-1.7")
+    assert "MATERIAL TESTING WORKS" in captured["string"]
     assert "A. INTRODUCTION" in captured["string"]
+    assert "Figure B.3.2 Extracted Core Samples" in captured["string"]
+    assert "figure__img--contain" in captured["string"]
     assert "FEBRUARY 2026" in captured["string"]
     assert image_path.resolve().as_uri() in captured["string"]
     assert captured["base_url"] == tmp_path.resolve().as_uri()
