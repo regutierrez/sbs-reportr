@@ -711,6 +711,7 @@ async function submitIntake(): Promise<void> {
   display: grid;
   gap: 0.85rem;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: start;
 }
 
 .field-grid--signature {
@@ -720,6 +721,7 @@ async function submitIntake(): Promise<void> {
 .field {
   display: grid;
   gap: 0.35rem;
+  align-content: start;
 }
 
 .field--full {
