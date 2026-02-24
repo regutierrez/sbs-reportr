@@ -13,21 +13,23 @@ from fastapi.responses import FileResponse, JSONResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
-from reportr.reporting import (
+from reportr.reporting.activity_report_pdf_renderer import (
     ActivityReportPdfRenderer,
     RendererNotReadyError,
     UnconfiguredActivityReportPdfRenderer,
     WeasyPrintActivityReportPdfRenderer,
 )
-from reportr.storage import (
+from reportr.storage.models import (
     PHOTO_GROUP_LIMITS,
-    FileSystemReportRepository,
     ImageMeta,
     PhotoGroupName,
     ReportFormFields,
-    ReportRepository,
     ReportSession,
     ReportStatus,
+)
+from reportr.storage.report_repository import (
+    FileSystemReportRepository,
+    ReportRepository,
     SessionNotFoundError,
 )
 
