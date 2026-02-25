@@ -6,10 +6,10 @@ import { useReportIntakeDraft, type UploadItem } from '@/composables/use-report-
 import type { PhotoGroupName, ReportFormFields } from '@/types/report'
 import ConfirmationScreen from '@/screens/ConfirmationScreen.vue'
 
-const { generateReportMock, resolveApiUrlMock, routerPushMock, routerReplaceMock } = vi.hoisted(() => {
+const { downloadReportPdfMock, generateReportMock, routerPushMock, routerReplaceMock } = vi.hoisted(() => {
   return {
+    downloadReportPdfMock: vi.fn(),
     generateReportMock: vi.fn(),
-    resolveApiUrlMock: vi.fn(),
     routerPushMock: vi.fn(),
     routerReplaceMock: vi.fn(),
   }
@@ -38,8 +38,8 @@ vi.mock('@/api', () => {
 
   return {
     ApiError,
+    downloadReportPdf: downloadReportPdfMock,
     generateReport: generateReportMock,
-    resolveApiUrl: resolveApiUrlMock,
   }
 })
 
@@ -164,7 +164,7 @@ describe('ConfirmationScreen', () => {
     expect(routerReplaceMock).toHaveBeenCalledWith({ name: 'intake' })
   })
 
-  it('generates report, opens download, and supports re-download and revert', async () => {
+  it('generates report, downloads pdf, and supports revert', async () => {
     const draft = resetDraftStore()
     draft.confirmationReady.value = true
     draft.sessionId.value = 'session-1'
@@ -178,9 +178,7 @@ describe('ConfirmationScreen', () => {
       session_id: 'session-1',
       download_url: '/reports/session-1/download',
     })
-    resolveApiUrlMock.mockImplementation((path: string) => `http://localhost:8000${path}`)
-
-    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+    downloadReportPdfMock.mockResolvedValue(undefined)
 
     const wrapper = mount(ConfirmationScreen, {
       global: {
@@ -194,25 +192,18 @@ describe('ConfirmationScreen', () => {
     await flushPromises()
 
     expect(generateReportMock).toHaveBeenCalledWith('session-1')
-    expect(openSpy).toHaveBeenCalledWith(
-      'http://localhost:8000/reports/session-1/download',
-      '_blank',
-      'noopener',
-    )
-    expect(wrapper.text()).toContain('Report generated. A new tab was opened for download.')
+    expect(downloadReportPdfMock).toHaveBeenCalledWith('/reports/session-1/download')
+    expect(wrapper.text()).toContain('Report generated. Download started.')
 
-    const buttons = wrapper.findAll('button')
-    const downloadAgainButton = buttons.find((button) => button.text().includes('Download Again'))
-    const revertButton = buttons.find((button) => button.text().includes('Revert'))
+    const revertButton = wrapper.findAll('button').find((button) => button.text().includes('Revert'))
 
-    if (!downloadAgainButton || !revertButton) {
-      throw new Error('Expected confirmation actions to be available.')
+    if (!revertButton) {
+      throw new Error('Expected revert action to be available.')
     }
 
-    await downloadAgainButton.trigger('click')
     await revertButton.trigger('click')
 
-    expect(openSpy).toHaveBeenCalledTimes(2)
+    expect(downloadReportPdfMock).toHaveBeenCalledTimes(1)
     expect(routerPushMock).toHaveBeenCalledWith({ name: 'intake' })
   })
 })

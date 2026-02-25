@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { ApiError, generateReport, resolveApiUrl } from '@/api'
+import { ApiError, downloadReportPdf, generateReport } from '@/api'
 import SectionHeader from '@/components/SectionHeader.vue'
 import { PHOTO_GROUPS } from '@/constants/photo-groups'
 import { useReportIntakeDraft } from '@/composables/use-report-intake-draft'
@@ -28,10 +28,6 @@ const photoSummary = computed(() => {
 
 const canContinue = computed(() => {
   return confirmationReady.value && !!sessionId.value && !isGenerating.value
-})
-
-const canRedownload = computed(() => {
-  return !!generatedDownloadUrl.value
 })
 
 onMounted(() => {
@@ -75,21 +71,13 @@ async function continueToGenerate(): Promise<void> {
   try {
     const generated = await generateReport(sessionId.value)
     generatedDownloadUrl.value = generated.download_url
-    generateSuccess.value = 'Report generated. A new tab was opened for download.'
-    window.open(resolveApiUrl(generated.download_url), '_blank', 'noopener')
+    await downloadReportPdf(generated.download_url)
+    generateSuccess.value = 'Report generated. Download started.'
   } catch (error) {
     generateError.value = normalizeErrorMessage(error)
   } finally {
     isGenerating.value = false
   }
-}
-
-function redownloadReport(): void {
-  if (!generatedDownloadUrl.value) {
-    return
-  }
-
-  window.open(resolveApiUrl(generatedDownloadUrl.value), '_blank', 'noopener')
 }
 
 function revertToForm(): void {
@@ -189,14 +177,6 @@ function revertToForm(): void {
         <p class="confirmation-actions__session">Session ID: {{ sessionId }}</p>
         <div class="confirmation-actions__buttons">
           <button class="btn btn--secondary" type="button" @click="revertToForm">Revert</button>
-          <button
-            class="btn btn--secondary"
-            type="button"
-            :disabled="!canRedownload"
-            @click="redownloadReport"
-          >
-            Download Again
-          </button>
           <button class="btn btn--primary" type="button" :disabled="!canContinue" @click="continueToGenerate">
             {{ isGenerating ? 'Generating...' : 'Continue and Generate PDF' }}
           </button>
@@ -206,9 +186,6 @@ function revertToForm(): void {
         </p>
         <p v-if="generateSuccess" class="confirmation-actions__message confirmation-actions__message--success">
           {{ generateSuccess }}
-        </p>
-        <p v-if="generatedDownloadUrl" class="confirmation-actions__message confirmation-actions__message--mono">
-          Download URL: {{ generatedDownloadUrl }}
         </p>
       </footer>
     </div>
@@ -389,11 +366,6 @@ function revertToForm(): void {
 
 .confirmation-actions__message--success {
   color: #067647;
-}
-
-.confirmation-actions__message--mono {
-  font-family: var(--font-mono);
-  color: var(--muted);
 }
 
 @media (max-width: 700px) {
