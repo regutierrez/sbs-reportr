@@ -270,7 +270,7 @@ def create_app(
         return FileResponse(
             path=pdf_path,
             media_type="application/pdf",
-            filename=f"activity-report-{session_id}.pdf",
+            filename=pdf_path.name,
         )
 
     return app

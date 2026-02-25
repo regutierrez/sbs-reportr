@@ -1,3 +1,4 @@
+import re
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -145,7 +146,7 @@ class FileSystemReportRepository(ReportRepository):
 
         report_directory = self._reports_root / str(session_id)
         report_directory.mkdir(parents=True, exist_ok=True)
-        report_path = report_directory / "report.pdf"
+        report_path = report_directory / self._build_report_filename(session)
         report_path.write_bytes(pdf_bytes)
 
         session.generated_pdf_path = report_path.as_posix()
@@ -232,6 +233,22 @@ class FileSystemReportRepository(ReportRepository):
 
     def _metadata_path(self, session_id: UUID) -> Path:
         return self._session_directory(session_id) / "session.json"
+
+    @classmethod
+    def _build_report_filename(cls, session: ReportSession) -> str:
+        if session.form_fields is None:
+            return "activity-report.pdf"
+
+        building_name = session.form_fields.building_details.building_name
+        building_slug = cls._slugify_filename_part(building_name)
+        if not building_slug:
+            return "activity-report.pdf"
+
+        return f"{building_slug}-activity-report.pdf"
+
+    @staticmethod
+    def _slugify_filename_part(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
 
     @staticmethod
     def _resolve_extension(original_filename: str) -> str:

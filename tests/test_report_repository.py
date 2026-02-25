@@ -136,12 +136,25 @@ def test_persist_generated_pdf_writes_output_and_updates_status(tmp_path: Path) 
     report_path = repository.persist_generated_pdf(session.id, b"%PDF-1.7")
     loaded = repository.get_session(session.id)
 
-    assert report_path == tmp_path / "reports" / str(session.id) / "report.pdf"
+    assert report_path == tmp_path / "reports" / str(session.id) / "activity-report.pdf"
     assert report_path.read_bytes() == b"%PDF-1.7"
     assert loaded is not None
     assert loaded.status == ReportStatus.COMPLETED
     assert loaded.generated_pdf_path == report_path.as_posix()
     assert repository.get_generated_pdf_path(session.id) == report_path
+
+
+def test_persist_generated_pdf_uses_building_name_slug_in_filename(tmp_path: Path) -> None:
+    repository = make_repository(tmp_path)
+    session = repository.create_session()
+    repository.save_form_fields(session.id, build_form_fields())
+
+    report_path = repository.persist_generated_pdf(session.id, b"%PDF-1.7")
+
+    assert (
+        report_path
+        == tmp_path / "reports" / str(session.id) / "acacia-residences-activity-report.pdf"
+    )
 
 
 def test_get_generated_pdf_path_returns_none_when_not_generated(tmp_path: Path) -> None:

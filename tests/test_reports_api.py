@@ -237,6 +237,10 @@ def test_generate_report_persists_pdf_after_validation(tmp_path: Path) -> None:
     assert first_download.content == b"%PDF-1.7\nrendered"
     assert second_download.content == b"%PDF-1.7\nrendered"
 
+    content_disposition = first_download.headers.get("content-disposition")
+    assert content_disposition is not None
+    assert "acacia-residences-activity-report.pdf" in content_disposition
+
 
 def test_generate_report_returns_existing_download_when_already_completed(tmp_path: Path) -> None:
     renderer = StubRenderer(output=b"%PDF-1.7\nrendered")
