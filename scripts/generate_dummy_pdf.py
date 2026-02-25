@@ -27,6 +27,8 @@ from reportr.storage.models import (
 )
 from reportr.reporting.activity_report_pdf_renderer import WeasyPrintActivityReportPdfRenderer
 
+DUMMY_ROOT = Path("/tmp/reportr/dummy")
+
 
 def copy_dummy_images(session_id: uuid.UUID, sessions_root: Path):
     """Copy extracted images into the session folder to simulate uploaded photos."""
@@ -129,7 +131,7 @@ def copy_dummy_images(session_id: uuid.UUID, sessions_root: Path):
 
 def create_dummy_session():
     # Setup directories
-    sessions_root = Path("data/dummy_sessions")
+    sessions_root = DUMMY_ROOT / "sessions"
     session_id = uuid.uuid4()
     os.makedirs(sessions_root / str(session_id), exist_ok=True)
 
@@ -186,13 +188,12 @@ def main():
     print("Initializing PDF Renderer...")
     renderer = WeasyPrintActivityReportPdfRenderer(sessions_root=sessions_root)
 
-    output_pdf = "dummy_report.pdf"
+    output_pdf = DUMMY_ROOT / "dummy_report.pdf"
     print(f"Rendering PDF to {output_pdf}...")
 
     try:
         pdf_bytes = renderer.render(session)
-        with open(output_pdf, "wb") as f:
-            f.write(pdf_bytes)
+        output_pdf.write_bytes(pdf_bytes)
         print(f"Success! Created {output_pdf}")
     except Exception as e:
         print(f"Error rendering PDF: {e}")
