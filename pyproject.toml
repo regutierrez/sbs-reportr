@@ -6,7 +6,6 @@ build-backend = "hatchling.build"
 name = "sbs-reportr"
 version = "0.1.0"
 description = "Backend API for the SBS reporting workflow."
-readme = "PLAN.md"
 requires-python = ">=3.13"
 dependencies = [
   "fastapi[standard]>=0.116.0",
