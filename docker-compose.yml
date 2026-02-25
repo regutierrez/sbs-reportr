@@ -1,0 +1,20 @@
+services:
+  fastapi:
+    build: .
+    container_name: reportr
+    expose:
+      - "9999"
+    volumes:
+      - frontend_dist:/srv/frontend
+    networks:
+      edge:
+        aliases:
+          - reportr
+    restart: unless-stopped
+
+volumes:
+  frontend_dist:
+
+networks:
+  edge:
+    external: true

@@ -1,0 +1,17 @@
+.git/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.vite/
+__pycache__/
+*.pyc
+
+src/frontend/node_modules/
+src/frontend/dist/
+
+data/
+tests/
+scripts/
+docs/
+.agents/
+extracted_images/
