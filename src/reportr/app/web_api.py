@@ -187,6 +187,31 @@ def create_app(
         report_renderer: ActivityReportPdfRenderer = app.state.report_renderer
 
         session = _require_session(repository, session_id)
+
+        existing_pdf_path = repository.get_generated_pdf_path(session_id)
+        if existing_pdf_path is not None:
+            if session.status != ReportStatus.COMPLETED:
+                repository.set_status(session_id, ReportStatus.COMPLETED)
+
+            return GenerateReportResponse(
+                session_id=session_id,
+                download_url=f"/reports/{session_id}/download",
+            )
+
+        if session.status == ReportStatus.COMPLETED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Report was already generated, but the generated PDF is no longer available."
+                ),
+            )
+
+        if session.status == ReportStatus.GENERATING:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Report generation is already in progress.",
+            )
+
         missing_requirements = _collect_missing_requirements(session)
         if missing_requirements:
             raise HTTPException(
@@ -197,9 +222,9 @@ def create_app(
                 },
             )
 
-        async with app.state.render_semaphore:
-            repository.set_status(session_id, ReportStatus.GENERATING)
+        repository.set_status(session_id, ReportStatus.GENERATING)
 
+        async with app.state.render_semaphore:
             try:
                 latest_session = _require_session(repository, session_id)
                 pdf_bytes = await run_in_threadpool(report_renderer.render, latest_session)

@@ -12,9 +12,11 @@ from reportr.storage import FileSystemReportRepository, PhotoGroupName, ReportSe
 class StubRenderer:
     def __init__(self, output: bytes = b"%PDF-1.7\nphase-3") -> None:
         self.output = output
+        self.render_call_count = 0
 
     def render(self, session: ReportSession) -> bytes:
         _ = session
+        self.render_call_count += 1
         return self.output
 
 
@@ -222,6 +224,7 @@ def test_generate_report_persists_pdf_after_validation(tmp_path: Path) -> None:
     assert stored_session.status == ReportStatus.COMPLETED
     assert stored_session.generated_pdf_path is not None
     assert Path(stored_session.generated_pdf_path).read_bytes() == b"%PDF-1.7\nrendered"
+    assert renderer.render_call_count == 1
 
     images_root = tmp_path / "sessions" / str(session_id) / "images"
     assert not images_root.exists()
@@ -233,3 +236,84 @@ def test_generate_report_persists_pdf_after_validation(tmp_path: Path) -> None:
     assert second_download.status_code == 200
     assert first_download.content == b"%PDF-1.7\nrendered"
     assert second_download.content == b"%PDF-1.7\nrendered"
+
+
+def test_generate_report_returns_existing_download_when_already_completed(tmp_path: Path) -> None:
+    renderer = StubRenderer(output=b"%PDF-1.7\nrendered")
+    client, repository = make_client(tmp_path, renderer=renderer)
+    session_id = create_complete_session(client)
+
+    first_response = client.post(f"/reports/{session_id}/generate")
+    second_response = client.post(f"/reports/{session_id}/generate")
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+
+    assert first_response.json()["download_url"] == f"/reports/{session_id}/download"
+    assert second_response.json()["download_url"] == f"/reports/{session_id}/download"
+
+    stored_session = repository.get_session(session_id)
+    assert stored_session is not None
+    assert stored_session.generated_pdf_path is not None
+    assert Path(stored_session.generated_pdf_path).read_bytes() == b"%PDF-1.7\nrendered"
+    assert renderer.render_call_count == 1
+
+
+def test_generate_report_returns_existing_download_when_pdf_exists_but_status_is_not_completed(
+    tmp_path: Path,
+) -> None:
+    renderer = StubRenderer(output=b"%PDF-1.7\nrendered")
+    client, repository = make_client(tmp_path, renderer=renderer)
+    session_id = create_complete_session(client)
+
+    generate_response = client.post(f"/reports/{session_id}/generate")
+    assert generate_response.status_code == 200
+
+    repository.set_status(session_id, ReportStatus.DRAFT)
+
+    regenerate_response = client.post(f"/reports/{session_id}/generate")
+
+    assert regenerate_response.status_code == 200
+    assert regenerate_response.json()["download_url"] == f"/reports/{session_id}/download"
+    assert renderer.render_call_count == 1
+
+    refreshed_session = repository.get_session(session_id)
+    assert refreshed_session is not None
+    assert refreshed_session.status == ReportStatus.COMPLETED
+
+
+def test_generate_report_returns_conflict_when_generation_is_already_in_progress(
+    tmp_path: Path,
+) -> None:
+    renderer = StubRenderer(output=b"%PDF-1.7\nrendered")
+    client, repository = make_client(tmp_path, renderer=renderer)
+    session_id = create_complete_session(client)
+
+    repository.set_status(session_id, ReportStatus.GENERATING)
+
+    response = client.post(f"/reports/{session_id}/generate")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Report generation is already in progress."
+    assert renderer.render_call_count == 0
+
+
+def test_generate_report_returns_conflict_when_completed_pdf_is_missing(tmp_path: Path) -> None:
+    renderer = StubRenderer(output=b"%PDF-1.7\nrendered")
+    client, repository = make_client(tmp_path, renderer=renderer)
+    session_id = create_complete_session(client)
+
+    generate_response = client.post(f"/reports/{session_id}/generate")
+    assert generate_response.status_code == 200
+
+    generated_pdf_path = repository.get_generated_pdf_path(session_id)
+    assert generated_pdf_path is not None
+    generated_pdf_path.unlink()
+
+    regenerate_response = client.post(f"/reports/{session_id}/generate")
+
+    assert regenerate_response.status_code == 409
+    assert regenerate_response.json()["detail"] == (
+        "Report was already generated, but the generated PDF is no longer available."
+    )
+    assert renderer.render_call_count == 1
