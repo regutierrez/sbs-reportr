@@ -60,16 +60,44 @@ def copy_dummy_images(session_id: uuid.UUID, sessions_root: Path):
 
     images_metadata = {}
 
+    from reportr.storage.models import PHOTO_GROUP_LIMITS
+
     for group_name, pattern in mappings.items():
         group_dir = session_images_dir / group_name.value
         os.makedirs(group_dir, exist_ok=True)
 
-        matched_files = glob.glob(str(extracted_dir / pattern))
+        if group_name == PhotoGroupName.SUPERSTRUCTURE_REBAR_SCANNING_PHOTOS:
+            matched_files = [
+                str(
+                    extracted_dir
+                    / "C. DATA GATHERING FOR SUBSTRUCTURE - C.3. Restoration for Coring Works, Backfilling, and Compaction - 4.jpeg"
+                ),
+                str(
+                    extracted_dir
+                    / "C. DATA GATHERING FOR SUBSTRUCTURE - C.3. Restoration for Coring Works, Backfilling, and Compaction - 5.jpeg"
+                ),
+                str(
+                    extracted_dir
+                    / "C. DATA GATHERING FOR SUBSTRUCTURE - C.3. Restoration for Coring Works, Backfilling, and Compaction - 6.jpeg"
+                ),
+                str(
+                    extracted_dir
+                    / "B. DATA GATHERING FOR SUPERSTRUCTURE - B.1. Rebar Scanning - 1.jpeg"
+                ),
+                str(
+                    extracted_dir
+                    / "B. DATA GATHERING FOR SUPERSTRUCTURE - B.1. Rebar Scanning - 2.jpeg"
+                ),
+            ]
+        else:
+            matched_files = glob.glob(str(extracted_dir / pattern))
+
+        # Limit the number of photos to the maximum defined by the model
+        _, max_images = PHOTO_GROUP_LIMITS.get(group_name, (1, 4))
 
         group_metadata = []
         for i, filepath in enumerate(matched_files):
-            # We'll just take up to 4 images per group to keep the PDF a reasonable size
-            if i >= 4:
+            if i >= max_images:
                 break
 
             src = Path(filepath)

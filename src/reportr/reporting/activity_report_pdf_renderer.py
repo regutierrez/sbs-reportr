@@ -1,4 +1,5 @@
 from calendar import month_name
+from dataclasses import dataclass
 from html import escape
 from pathlib import Path
 from typing import Protocol
@@ -6,6 +7,12 @@ from typing import Protocol
 from weasyprint import HTML
 
 from reportr.storage import PhotoGroupName, ReportFormFields, ReportSession
+
+
+@dataclass(frozen=True, slots=True)
+class _ImageInfo:
+    uri: str
+    is_landscape: bool
 
 
 class ActivityReportPdfRenderer(Protocol):
@@ -54,7 +61,7 @@ class WeasyPrintActivityReportPdfRenderer:
         logo_uri = self._company_logo_uri()
 
         cover_photo = self._first_image_uri(session, PhotoGroupName.BUILDING_DETAILS_BUILDING_PHOTO)
-        building_photo_uris = self._all_image_uris(
+        building_photos = self._all_image_info(
             session, PhotoGroupName.BUILDING_DETAILS_BUILDING_PHOTO
         )
 
@@ -193,7 +200,7 @@ class WeasyPrintActivityReportPdfRenderer:
                             self._paragraph(introduction_opening_paragraph),
                             self._figure(
                                 form.building_details.building_name,
-                                building_photo_uris,
+                                building_photos,
                                 contain_images=True,
                                 large=True,
                             ),
@@ -207,7 +214,7 @@ class WeasyPrintActivityReportPdfRenderer:
                     self._paragraph(b1_paragraph)
                     + self._figure(
                         "Figure B.1. REBAR SCANNING",
-                        self._all_image_uris(
+                        self._all_image_info(
                             session, PhotoGroupName.SUPERSTRUCTURE_REBAR_SCANNING_PHOTOS
                         ),
                     ),
@@ -217,7 +224,7 @@ class WeasyPrintActivityReportPdfRenderer:
                     self._paragraph(b2_paragraph)
                     + self._figure(
                         "Figure B.2. REBOUND HAMMER TESTS",
-                        self._all_image_uris(
+                        self._all_image_info(
                             session, PhotoGroupName.SUPERSTRUCTURE_REBOUND_HAMMER_TEST_PHOTOS
                         ),
                     ),
@@ -227,13 +234,13 @@ class WeasyPrintActivityReportPdfRenderer:
                     self._paragraph(b3_paragraph)
                     + self._figure(
                         "Figure B.3.1 Concrete Core Extraction",
-                        self._all_image_uris(
+                        self._all_image_info(
                             session, PhotoGroupName.SUPERSTRUCTURE_CONCRETE_CORING_PHOTOS
                         ),
                     )
                     + self._figure(
                         "Figure B.3.2 Extracted Core Samples",
-                        self._all_image_uris(
+                        self._all_image_info(
                             session, PhotoGroupName.SUPERSTRUCTURE_CORE_SAMPLES_FAMILY_PIC
                         ),
                         contain_images=True,
@@ -244,13 +251,13 @@ class WeasyPrintActivityReportPdfRenderer:
                     self._paragraph(b4_paragraph_intro)
                     + self._figure(
                         "Figure B.4.1 Rebar Extraction",
-                        self._all_image_uris(
+                        self._all_image_info(
                             session, PhotoGroupName.SUPERSTRUCTURE_REBAR_EXTRACTION_PHOTOS
                         ),
                     )
                     + self._figure(
                         "Figure B.4.2 Extracted Rebar Samples",
-                        self._all_image_uris(
+                        self._all_image_info(
                             session, PhotoGroupName.SUPERSTRUCTURE_REBAR_SAMPLES_FAMILY_PIC
                         ),
                     )
@@ -261,7 +268,7 @@ class WeasyPrintActivityReportPdfRenderer:
                     self._paragraph(b5_paragraph)
                     + self._figure(
                         "Figure B.5. Chipping of Existing Slab",
-                        self._all_image_uris(
+                        self._all_image_info(
                             session, PhotoGroupName.SUPERSTRUCTURE_CHIPPING_OF_SLAB_PHOTOS
                         ),
                     ),
@@ -271,7 +278,7 @@ class WeasyPrintActivityReportPdfRenderer:
                     self._paragraph(b6_paragraph)
                     + self._figure(
                         "Figure B.6. Restoration Works",
-                        self._all_image_uris(
+                        self._all_image_info(
                             session, PhotoGroupName.SUPERSTRUCTURE_RESTORATION_PHOTOS
                         ),
                     ),
@@ -282,7 +289,7 @@ class WeasyPrintActivityReportPdfRenderer:
                     self._paragraph(c1_paragraph)
                     + self._figure(
                         "Figure C.1. Concrete Core Extraction for Foundation",
-                        self._all_image_uris(
+                        self._all_image_info(
                             session, PhotoGroupName.SUBSTRUCTURE_CORING_FOR_FOUNDATION_PHOTOS
                         ),
                     ),
@@ -292,7 +299,7 @@ class WeasyPrintActivityReportPdfRenderer:
                     self._paragraph(c2_paragraph)
                     + self._figure(
                         "Figure C.2. Rebar Scanning for Foundation",
-                        self._all_image_uris(
+                        self._all_image_info(
                             session,
                             PhotoGroupName.SUBSTRUCTURE_REBAR_SCANNING_FOR_FOUNDATION_PHOTOS,
                         ),
@@ -303,7 +310,7 @@ class WeasyPrintActivityReportPdfRenderer:
                     self._paragraph(c3_paragraph)
                     + self._figure(
                         "Figure C.3. Restoration for Coring Works, Backfilling, and Compaction",
-                        self._all_image_uris(
+                        self._all_image_info(
                             session,
                             PhotoGroupName.SUBSTRUCTURE_RESTORATION_BACKFILLING_COMPACTION_PHOTOS,
                         ),
@@ -520,6 +527,7 @@ class WeasyPrintActivityReportPdfRenderer:
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 2.4mm;
+        align-items: start;
         break-inside: avoid;
         page-break-inside: avoid;
       }}
@@ -533,30 +541,31 @@ class WeasyPrintActivityReportPdfRenderer:
       }}
 
       .figure__item {{
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background: #e9eef5;
-        border: 1px solid #cdd6e2;
-        padding: 1.6mm;
         break-inside: avoid;
         page-break-inside: avoid;
       }}
 
       .figure__img {{
+        display: block;
         width: 100%;
+        height: auto;
         max-height: 66mm;
         object-fit: contain;
-        border: 1px solid #c9c9c9;
-        background: #ffffff;
+      }}
+
+      .figure__img--portrait {{
+        max-height: 82mm;
       }}
 
       .figure__grid--three .figure__img {{
         max-height: 52mm;
       }}
 
+      .figure__grid--three .figure__img--portrait {{
+        max-height: 66mm;
+      }}
+
       .figure__img--contain {{
-        height: auto;
         max-height: 82mm;
       }}
 
@@ -667,35 +676,37 @@ class WeasyPrintActivityReportPdfRenderer:
     def _figure(
         self,
         caption: str,
-        image_uris: list[str],
+        images: list[_ImageInfo],
         *,
         contain_images: bool = False,
         large: bool = False,
     ) -> str:
         grid_classes = ["figure__grid"]
-        image_classes = ["figure__img"]
+        base_classes = ["figure__img"]
 
         if large:
-            image_classes.append("figure__img--large")
+            base_classes.append("figure__img--large")
             grid_classes.append("figure__grid--single")
-        elif len(image_uris) == 1:
+        elif len(images) == 1:
             grid_classes.append("figure__grid--single")
-        elif len(image_uris) == 3 or len(image_uris) >= 5:
+        elif len(images) == 3 or len(images) >= 5:
             grid_classes.append("figure__grid--three")
 
         if contain_images:
-            image_classes.append("figure__img--contain")
+            base_classes.append("figure__img--contain")
 
-        image_class_markup = " ".join(image_classes)
+        base_class_markup = " ".join(base_classes)
         grid_class_markup = " ".join(grid_classes)
-        images_markup = "".join(
-            (
+        items: list[str] = []
+        for img in images:
+            orientation = "figure__img--landscape" if img.is_landscape else "figure__img--portrait"
+            cls = f"{base_class_markup} {orientation}"
+            items.append(
                 '<div class="figure__item">'
-                f'<img class="{image_class_markup}" src="{uri}" alt="{escape(caption)}" />'
+                f'<img class="{cls}" src="{img.uri}" alt="{escape(caption)}" />'
                 "</div>"
             )
-            for uri in image_uris
-        )
+        images_markup = "".join(items)
         if not images_markup:
             images_markup = '<p class="figure__missing">No images uploaded for this figure.</p>'
 
@@ -713,14 +724,16 @@ class WeasyPrintActivityReportPdfRenderer:
         return logo_path.resolve().as_uri()
 
     def _first_image_uri(self, session: ReportSession, group_name: PhotoGroupName) -> str | None:
-        uris = self._all_image_uris(session, group_name)
-        if uris:
-            return uris[0]
+        infos = self._all_image_info(session, group_name)
+        if infos:
+            return infos[0].uri
         return None
 
-    def _all_image_uris(self, session: ReportSession, group_name: PhotoGroupName) -> list[str]:
+    def _all_image_info(
+        self, session: ReportSession, group_name: PhotoGroupName
+    ) -> list[_ImageInfo]:
         image_metadata = session.images.get(group_name.value, [])
-        image_uris: list[str] = []
+        result: list[_ImageInfo] = []
 
         for image in image_metadata:
             image_path = (
@@ -731,9 +744,14 @@ class WeasyPrintActivityReportPdfRenderer:
                 / image.stored_filename
             )
             if image_path.exists():
-                image_uris.append(image_path.resolve().as_uri())
+                result.append(
+                    _ImageInfo(
+                        uri=image_path.resolve().as_uri(),
+                        is_landscape=image.width >= image.height,
+                    )
+                )
 
-        return image_uris
+        return result
 
 
 def _format_testing_month(testing_date: str) -> str:
