@@ -249,6 +249,47 @@ Build a Vue + FastAPI reporting app that captures project intake details and pho
 - Persistent progress/save draft and resume later.
 - In-app PDF preview that matches WeasyPrint styling as closely as possible.
 - Batch processing endpoint accepting CSV input to generate multiple reports.
+- Structured backend logging for ingestion/render lifecycle (session create/save, per-image upload start+finish with size/dimensions/group, generate start/finish duration, and clear error events with session_id).
+
+## Proposed Backend Logging Schema (for implementation)
+
+### Format
+- Structured JSON logs emitted from backend app handlers.
+- UTC ISO8601 timestamps.
+- Namespaced event IDs (example: `report.generate.completed`).
+- Request correlation via `request_id` (use `X-Request-ID` when present; otherwise generate UUID4).
+
+### Common fields
+- `ts`, `level`, `event`, `request_id`
+- `session_id` (when available)
+- `route`, `method`, `status_code`, `duration_ms`
+- `error_type`, `error_detail` (errors only)
+
+### Event catalog
+- `app.startup.storage_config` (INFO): `sessions_root`, `reports_root`, `session_ttl_seconds`, `cleanup_interval_seconds`
+- `report.session.created` (INFO): `session_id`
+- `report.form.saved` (INFO): `session_id`
+- `report.image.upload.started` (DEBUG): `session_id`, `group_name`, `original_filename`, `content_type`, `size_bytes`
+- `report.image.upload.completed` (INFO): `session_id`, `group_name`, `image_id`, `stored_filename`, `size_bytes`, `width`, `height`, `duration_ms`
+- `report.image.upload.failed` (WARNING/ERROR): `session_id`, `group_name`, `status_code`, `error_type`
+- `report.generate.started` (INFO): `session_id`
+- `report.generate.skipped_existing_pdf` (INFO): `session_id`, `download_url`
+- `report.generate.completed` (INFO): `session_id`, `pdf_size_bytes`, `duration_ms`
+- `report.generate.conflict` (WARNING): `session_id`, `reason`
+- `report.generate.failed` (ERROR): `session_id`, `error_type`, `duration_ms`
+- `report.download.sent` (INFO): `session_id`, `filename`
+- `report.download.missing` (WARNING): `session_id`
+- `report.cleanup.completed` (INFO): `removed_count`, `max_age_seconds`, `duration_ms`
+
+### Redaction / safety
+- Do not log raw form values, binary image payloads, or full uploaded file contents.
+- Prefer metadata only (counts, dimensions, MIME type, IDs).
+
+### Log levels
+- `DEBUG`: high-volume start/internal diagnostics (disabled by default in production).
+- `INFO`: successful lifecycle events.
+- `WARNING`: expected/recoverable issues (`409`, `422`, missing resources).
+- `ERROR`: unexpected failures / unhandled exceptions.
 
 ## Execution Phases
 1. Scaffold frontend with `bun create vue@latest`; setup backend package skeleton.
