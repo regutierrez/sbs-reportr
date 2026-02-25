@@ -532,12 +532,22 @@ class WeasyPrintActivityReportPdfRenderer:
         page-break-inside: avoid;
       }}
 
+      .figure__grid + .figure__grid {{
+        margin-top: 2.4mm;
+      }}
+
       .figure__grid--single {{
         grid-template-columns: minmax(0, 1fr);
       }}
 
       .figure__grid--three {{
         grid-template-columns: repeat(3, minmax(0, 1fr));
+      }}
+
+      .figure__grid--portrait-pair {{
+        grid-template-columns: repeat(2, minmax(0, 60mm));
+        justify-content: center;
+        column-gap: 1.8mm;
       }}
 
       .figure__item {{
@@ -548,24 +558,27 @@ class WeasyPrintActivityReportPdfRenderer:
       .figure__img {{
         display: block;
         width: 100%;
-        height: auto;
-        max-height: 66mm;
         object-fit: contain;
       }}
 
-      .figure__img--portrait {{
-        max-height: 82mm;
+      .figure__img--landscape {{
+        height: 55mm;
       }}
 
-      .figure__grid--three .figure__img {{
-        max-height: 52mm;
+      .figure__img--portrait {{
+        height: 75mm;
+      }}
+
+      .figure__grid--three .figure__img--landscape {{
+        height: 45mm;
       }}
 
       .figure__grid--three .figure__img--portrait {{
-        max-height: 66mm;
+        height: 60mm;
       }}
 
       .figure__img--contain {{
+        height: auto;
         max-height: 82mm;
       }}
 
@@ -681,15 +694,60 @@ class WeasyPrintActivityReportPdfRenderer:
         contain_images: bool = False,
         large: bool = False,
     ) -> str:
+        if not images:
+            return f"""
+<section class="figure">
+  <p class="figure__missing">No images uploaded for this figure.</p>
+  <p class="figure__caption">{escape(caption)}</p>
+</section>
+"""
+
+        if large:
+            grids_markup = self._build_image_grid(
+                images, caption, contain_images=contain_images, large=True
+            )
+        else:
+            landscape = [img for img in images if img.is_landscape]
+            portrait = [img for img in images if not img.is_landscape]
+            grids_markup = ""
+            if landscape:
+                grids_markup += self._build_image_grid(
+                    landscape, caption, contain_images=contain_images
+                )
+            if portrait:
+                grids_markup += self._build_image_grid(
+                    portrait, caption, contain_images=contain_images
+                )
+
+        return f"""
+<section class="figure">
+  {grids_markup}
+  <p class="figure__caption">{escape(caption)}</p>
+</section>
+"""
+
+    def _build_image_grid(
+        self,
+        images: list[_ImageInfo],
+        caption: str,
+        *,
+        contain_images: bool = False,
+        large: bool = False,
+    ) -> str:
         grid_classes = ["figure__grid"]
         base_classes = ["figure__img"]
+
+        all_portrait = all(not img.is_landscape for img in images)
 
         if large:
             base_classes.append("figure__img--large")
             grid_classes.append("figure__grid--single")
         elif len(images) == 1:
             grid_classes.append("figure__grid--single")
-        elif len(images) == 3 or len(images) >= 5:
+        elif len(images) == 2 or len(images) == 4:
+            if all_portrait:
+                grid_classes.append("figure__grid--portrait-pair")
+        else:
             grid_classes.append("figure__grid--three")
 
         if contain_images:
@@ -706,16 +764,7 @@ class WeasyPrintActivityReportPdfRenderer:
                 f'<img class="{cls}" src="{img.uri}" alt="{escape(caption)}" />'
                 "</div>"
             )
-        images_markup = "".join(items)
-        if not images_markup:
-            images_markup = '<p class="figure__missing">No images uploaded for this figure.</p>'
-
-        return f"""
-<section class="figure">
-  <div class="{grid_class_markup}">{images_markup}</div>
-  <p class="figure__caption">{escape(caption)}</p>
-</section>
-"""
+        return f'<div class="{grid_class_markup}">{"".join(items)}</div>'
 
     def _company_logo_uri(self) -> str | None:
         logo_path = Path(__file__).resolve().parents[2] / "frontend" / "public" / "asset-80.svg"
