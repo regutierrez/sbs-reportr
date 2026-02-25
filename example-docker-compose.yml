@@ -4,8 +4,11 @@ services:
     container_name: reportr
     expose:
       - "9999"
+    environment:
+      REPORTR_DATA_ROOT: ${REPORTR_DATA_ROOT:-/tmp/reportr}
     volumes:
       - frontend_dist:/srv/frontend
+      - reportr_data:${REPORTR_DATA_ROOT:-/tmp/reportr}
     networks:
       edge:
         aliases:
@@ -14,6 +17,7 @@ services:
 
 volumes:
   frontend_dist:
+  reportr_data:
 
 networks:
   edge:

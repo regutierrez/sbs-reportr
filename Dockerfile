@@ -36,5 +36,6 @@ COPY --from=builder /app/src src
 # Logo SVGs referenced by the PDF renderer at src/frontend/public/
 COPY src/frontend/public/asset-80.svg src/frontend/public/asset-79.svg src/frontend/public/
 COPY --from=frontend /app/dist /app/frontend-dist
+ENV REPORTR_DATA_ROOT=/tmp/reportr
 EXPOSE 9999
 CMD ["sh", "-c", "cp -r /app/frontend-dist/* /srv/frontend/ && exec .venv/bin/uvicorn reportr.app.web_api:app --host 0.0.0.0 --port 9999"]

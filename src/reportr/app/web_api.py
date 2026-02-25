@@ -3,7 +3,8 @@
 import asyncio
 from contextlib import asynccontextmanager, suppress
 from datetime import timedelta
-from os import SEEK_END
+from os import SEEK_END, getenv
+from pathlib import Path
 from typing import BinaryIO
 from uuid import UUID
 
@@ -40,6 +41,10 @@ RENDER_CONCURRENCY_LIMIT = 3
 ABANDONED_SESSION_TTL_SECONDS = 24 * 60 * 60
 SESSION_CLEANUP_INTERVAL_SECONDS = 30 * 60
 ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+DATA_ROOT_ENV = "REPORTR_DATA_ROOT"
+SESSIONS_ROOT_ENV = "REPORTR_SESSIONS_ROOT"
+REPORTS_ROOT_ENV = "REPORTR_REPORTS_ROOT"
 
 
 class SessionStatusResponse(BaseModel):
@@ -86,7 +91,7 @@ def create_app(
                     await cleanup_task
 
     app = FastAPI(title="SBS Reportr API", version="0.1.0", lifespan=lifespan)
-    app.state.report_repository = repository or FileSystemReportRepository()
+    app.state.report_repository = repository or _build_default_repository()
     app.state.report_renderer = renderer or _build_default_renderer(app.state.report_repository)
     app.state.render_semaphore = render_semaphore or asyncio.Semaphore(RENDER_CONCURRENCY_LIMIT)
 
@@ -328,6 +333,40 @@ def _collect_missing_requirements(session: ReportSession) -> dict[str, list[str]
         missing["photo_groups"] = missing_photo_groups
 
     return missing
+
+
+def _resolve_default_data_root() -> Path:
+    source_root = Path(__file__).resolve().parents[2]
+    if source_root.name == "src":
+        return source_root.parent / "data"
+
+    return Path.cwd() / "data"
+
+
+def _resolve_repository_roots() -> tuple[Path, Path]:
+    sessions_root_value = getenv(SESSIONS_ROOT_ENV)
+    reports_root_value = getenv(REPORTS_ROOT_ENV)
+    data_root_value = getenv(DATA_ROOT_ENV)
+
+    sessions_root = Path(sessions_root_value).expanduser() if sessions_root_value else None
+    reports_root = Path(reports_root_value).expanduser() if reports_root_value else None
+
+    if sessions_root is not None and reports_root is not None:
+        return sessions_root, reports_root
+
+    data_root = (
+        Path(data_root_value).expanduser() if data_root_value else _resolve_default_data_root()
+    )
+
+    return (
+        sessions_root if sessions_root is not None else data_root / "sessions",
+        reports_root if reports_root is not None else data_root / "reports",
+    )
+
+
+def _build_default_repository() -> FileSystemReportRepository:
+    sessions_root, reports_root = _resolve_repository_roots()
+    return FileSystemReportRepository(sessions_root=sessions_root, reports_root=reports_root)
 
 
 def _build_default_renderer(repository: ReportRepository) -> ActivityReportPdfRenderer:
