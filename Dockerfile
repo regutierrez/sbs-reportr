@@ -4,7 +4,7 @@ WORKDIR /app
 COPY src/frontend/package.json src/frontend/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY src/frontend/ .
-RUN bun run build
+RUN bun run build-only
 
 # Stage 2: Install Python dependencies
 FROM python:3.13-slim AS builder
@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock PLAN.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY src/reportr/ src/reportr/
 RUN uv sync --frozen --no-dev
