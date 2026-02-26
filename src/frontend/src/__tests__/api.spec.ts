@@ -47,7 +47,7 @@ describe('downloadReportPdf', () => {
 
     await downloadReportPdf('/reports/session-1/download')
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:9999/reports/session-1/download', {
+    expect(fetchMock).toHaveBeenCalledWith('/api/reports/session-1/download', {
       method: 'GET',
     })
     expect(getLink()?.download).toBe('acacia-residences-activity-report.pdf')
