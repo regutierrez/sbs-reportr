@@ -104,17 +104,14 @@ function createItemId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-function releasePreviewUrls(items: UploadItem[]): void {
-  for (const item of items) {
-    URL.revokeObjectURL(item.previewUrl)
+function releasePreviewUrl(previewUrl: string): void {
+  if (previewUrl.startsWith('blob:')) {
+    URL.revokeObjectURL(previewUrl)
   }
 }
 
-function onFilesSelected(group: PhotoGroupConfig, files: File[]): void {
-  releasePreviewUrls(uploads[group.name])
-
-  const truncatedFiles = files.slice(0, group.max)
-  uploads[group.name] = truncatedFiles.map((file) => ({
+function createUploadItem(file: File): UploadItem {
+  return {
     id: createItemId(),
     name: file.name,
     file,
@@ -122,20 +119,94 @@ function onFilesSelected(group: PhotoGroupConfig, files: File[]): void {
     status: 'pending',
     message: 'Queued',
     uploadedImage: null,
-  }))
+  }
+}
 
-  selectionWarnings[group.name] =
-    files.length > group.max
-      ? `Only the first ${group.max} file(s) were kept for this group.`
-      : ''
+function createFileFingerprint(file: File): string {
+  return `${file.name}:${file.size}:${file.type}`
+}
+
+function onFilesSelected(group: PhotoGroupConfig, files: File[]): void {
+  if (group.max === 1) {
+    const [firstFile] = files
+
+    if (!firstFile) {
+      selectionWarnings[group.name] = ''
+      return
+    }
+
+    uploads[group.name].forEach((item) => releasePreviewUrl(item.previewUrl))
+    uploads[group.name] = [createUploadItem(firstFile)]
+    selectionWarnings[group.name] = files.length > 1 ? 'Only 1 photo is allowed for this group.' : ''
+    return
+  }
+
+  const existingItems = uploads[group.name]
+  const remainingSlots = Math.max(0, group.max - existingItems.length)
+  const existingFingerprints = new Set(existingItems.map((item) => createFileFingerprint(item.file)))
+  const selectedFingerprints = new Set<string>()
+
+  const filesWithoutDuplicates: File[] = []
+  let duplicateCount = 0
+
+  for (const file of files) {
+    const fingerprint = createFileFingerprint(file)
+
+    if (existingFingerprints.has(fingerprint) || selectedFingerprints.has(fingerprint)) {
+      duplicateCount += 1
+      continue
+    }
+
+    selectedFingerprints.add(fingerprint)
+    filesWithoutDuplicates.push(file)
+  }
+
+  const filesToAdd = filesWithoutDuplicates.slice(0, remainingSlots)
+  const newItems: UploadItem[] = filesToAdd.map((file): UploadItem => createUploadItem(file))
+  uploads[group.name] = [...existingItems, ...newItems]
+
+  const warnings: string[] = []
+
+  if (duplicateCount > 0) {
+    warnings.push(
+      `${duplicateCount} duplicate photo${duplicateCount === 1 ? '' : 's'} skipped for this field.`,
+    )
+  }
+
+  if (filesWithoutDuplicates.length > filesToAdd.length) {
+    warnings.push(
+      remainingSlots === 0
+        ? `This group already has ${group.max} photo(s). Remove one to add another.`
+        : `Only ${filesToAdd.length} additional photo(s) were added. Max for this group is ${group.max}.`,
+    )
+  }
+
+  selectionWarnings[group.name] = warnings.join(' ')
+}
+
+function onUploadItemRemoved(group: PhotoGroupConfig, itemId: string): void {
+  uploads[group.name] = uploads[group.name].filter((item) => {
+    if (item.id !== itemId) {
+      return true
+    }
+
+    releasePreviewUrl(item.previewUrl)
+    return false
+  })
+
+  selectionWarnings[group.name] = ''
 }
 
 function photoGroupError(group: PhotoGroupConfig): string {
-  if (uploads[group.name].length < group.min) {
-    return `Add at least ${group.min} photo(s).`
+  const minRequirementError =
+    uploads[group.name].length < group.min ? `Add at least ${group.min} photo(s).` : ''
+  const selectionWarning = selectionWarnings[group.name]
+
+  if (minRequirementError && selectionWarning) {
+    return `${minRequirementError} ${selectionWarning}`
   }
 
-  return selectionWarnings[group.name]
+  return minRequirementError || selectionWarning
 }
 
 function normalizeErrorMessage(error: unknown): string {
@@ -346,6 +417,7 @@ async function submitIntake(): Promise<void> {
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.building_details_building_photo)"
             @select="(files) => onFilesSelected(photoGroupsByName.building_details_building_photo, files)"
+            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.building_details_building_photo, itemId)"
           />
         </div>
       </section>
@@ -377,6 +449,7 @@ async function submitIntake(): Promise<void> {
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_rebar_scanning_photos)"
             @select="(files) => onFilesSelected(photoGroupsByName.superstructure_rebar_scanning_photos, files)"
+            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_rebar_scanning_photos, itemId)"
           />
         </div>
       </section>
@@ -408,6 +481,7 @@ async function submitIntake(): Promise<void> {
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_rebound_hammer_test_photos)"
             @select="(files) => onFilesSelected(photoGroupsByName.superstructure_rebound_hammer_test_photos, files)"
+            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_rebound_hammer_test_photos, itemId)"
           />
         </div>
       </section>
@@ -439,6 +513,7 @@ async function submitIntake(): Promise<void> {
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_concrete_coring_photos)"
             @select="(files) => onFilesSelected(photoGroupsByName.superstructure_concrete_coring_photos, files)"
+            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_concrete_coring_photos, itemId)"
           />
           <ImageUploadField
             :label="photoGroupsByName.superstructure_core_samples_family_pic.label"
@@ -449,6 +524,7 @@ async function submitIntake(): Promise<void> {
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_core_samples_family_pic)"
             @select="(files) => onFilesSelected(photoGroupsByName.superstructure_core_samples_family_pic, files)"
+            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_core_samples_family_pic, itemId)"
           />
         </div>
       </section>
@@ -480,6 +556,7 @@ async function submitIntake(): Promise<void> {
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_rebar_extraction_photos)"
             @select="(files) => onFilesSelected(photoGroupsByName.superstructure_rebar_extraction_photos, files)"
+            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_rebar_extraction_photos, itemId)"
           />
           <ImageUploadField
             :label="photoGroupsByName.superstructure_rebar_samples_family_pic.label"
@@ -490,6 +567,7 @@ async function submitIntake(): Promise<void> {
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_rebar_samples_family_pic)"
             @select="(files) => onFilesSelected(photoGroupsByName.superstructure_rebar_samples_family_pic, files)"
+            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_rebar_samples_family_pic, itemId)"
           />
         </div>
       </section>
@@ -506,6 +584,7 @@ async function submitIntake(): Promise<void> {
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_chipping_of_slab_photos)"
             @select="(files) => onFilesSelected(photoGroupsByName.superstructure_chipping_of_slab_photos, files)"
+            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_chipping_of_slab_photos, itemId)"
           />
         </div>
       </section>
@@ -546,6 +625,7 @@ async function submitIntake(): Promise<void> {
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_restoration_photos)"
             @select="(files) => onFilesSelected(photoGroupsByName.superstructure_restoration_photos, files)"
+            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_restoration_photos, itemId)"
           />
         </div>
       </section>
@@ -590,6 +670,7 @@ async function submitIntake(): Promise<void> {
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.substructure_coring_for_foundation_photos)"
             @select="(files) => onFilesSelected(photoGroupsByName.substructure_coring_for_foundation_photos, files)"
+            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.substructure_coring_for_foundation_photos, itemId)"
           />
         </div>
       </section>
@@ -606,6 +687,7 @@ async function submitIntake(): Promise<void> {
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.substructure_rebar_scanning_for_foundation_photos)"
             @select="(files) => onFilesSelected(photoGroupsByName.substructure_rebar_scanning_for_foundation_photos, files)"
+            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.substructure_rebar_scanning_for_foundation_photos, itemId)"
           />
         </div>
       </section>
@@ -622,6 +704,7 @@ async function submitIntake(): Promise<void> {
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.substructure_restoration_backfilling_compaction_photos)"
             @select="(files) => onFilesSelected(photoGroupsByName.substructure_restoration_backfilling_compaction_photos, files)"
+            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.substructure_restoration_backfilling_compaction_photos, itemId)"
           />
         </div>
       </section>

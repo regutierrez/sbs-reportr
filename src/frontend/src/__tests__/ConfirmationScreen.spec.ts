@@ -188,6 +188,8 @@ describe('ConfirmationScreen', () => {
       },
     })
 
+    expect(wrapper.findAll('.photo-summary-item__thumbnail')).toHaveLength(PHOTO_GROUPS.length)
+
     await wrapper.get('.btn--primary').trigger('click')
     await flushPromises()
 

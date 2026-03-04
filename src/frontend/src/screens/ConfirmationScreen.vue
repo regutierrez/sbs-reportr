@@ -16,12 +16,18 @@ const generateSuccess = ref('')
 
 const photoSummary = computed(() => {
   return PHOTO_GROUPS.map((group) => {
-    const uploaded = uploads[group.name].filter((item) => item.uploadedImage !== null).length
+    const groupUploads = uploads[group.name]
+    const uploaded = groupUploads.filter((item) => item.uploadedImage !== null).length
 
     return {
       ...group,
       uploaded,
       complete: uploaded >= group.min,
+      thumbnails: groupUploads.map((item) => ({
+        id: item.id,
+        name: item.name,
+        previewUrl: item.previewUrl,
+      })),
     }
   })
 })
@@ -162,10 +168,27 @@ function revertToForm(): void {
         <SectionHeader title="Photo Coverage" subtitle="Required groups uploaded" />
         <ul class="photo-summary-list">
           <li v-for="group in photoSummary" :key="group.name" class="photo-summary-item">
-            <div>
-              <p class="photo-summary-item__label">{{ group.label }}</p>
-              <p class="photo-summary-item__section">{{ group.section }}</p>
+            <div class="photo-summary-item__content">
+              <div>
+                <p class="photo-summary-item__label">{{ group.label }}</p>
+                <p class="photo-summary-item__section">{{ group.section }}</p>
+              </div>
+
+              <ul v-if="group.thumbnails.length > 0" class="photo-summary-item__thumbnails">
+                <li
+                  v-for="thumbnail in group.thumbnails"
+                  :key="thumbnail.id"
+                  class="photo-summary-item__thumbnail-item"
+                >
+                  <img
+                    class="photo-summary-item__thumbnail"
+                    :src="thumbnail.previewUrl"
+                    :alt="thumbnail.name"
+                  />
+                </li>
+              </ul>
             </div>
+
             <p class="photo-summary-item__count" :data-complete="group.complete">
               {{ group.uploaded }} / {{ group.min }} min
             </p>
@@ -284,10 +307,16 @@ function revertToForm(): void {
   padding: 0.65rem;
   border: 1px solid var(--line);
   border-radius: 10px;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.75rem;
-  align-items: center;
+  align-items: start;
+}
+
+.photo-summary-item__content {
+  min-width: 0;
+  display: grid;
+  gap: 0.45rem;
 }
 
 .photo-summary-item__label,
@@ -306,7 +335,33 @@ function revertToForm(): void {
   font-size: 0.8rem;
 }
 
+.photo-summary-item__thumbnails {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.photo-summary-item__thumbnail-item {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.photo-summary-item__thumbnail {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .photo-summary-item__count {
+  align-self: center;
   font: 700 0.78rem/1 var(--font-mono);
   color: #067647;
 }
@@ -375,6 +430,14 @@ function revertToForm(): void {
 
   .confirmation-hero__title {
     font-size: 1.55rem;
+  }
+
+  .photo-summary-item {
+    grid-template-columns: 1fr;
+  }
+
+  .photo-summary-item__count {
+    justify-self: start;
   }
 }
 </style>

@@ -81,6 +81,12 @@ body {
   font-size: 0.78rem;
 }
 
+.upload-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
 .upload-dropzone {
   display: grid;
   place-items: center;
@@ -92,11 +98,16 @@ body {
   transition: border-color 150ms ease;
 }
 
+.upload-dropzone--camera {
+  background: color-mix(in srgb, var(--navy) 3%, white);
+}
+
 .upload-dropzone:hover {
   border-color: var(--orange);
 }
 
-.upload-dropzone__input {
+.upload-dropzone__input,
+.upload-dropzone__camera-input {
   display: none;
 }
 
@@ -120,12 +131,26 @@ body {
 }
 
 .upload-list__item {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
   font-size: 0.78rem;
   color: var(--muted);
+}
+
+.upload-list__thumbnail {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+}
+
+.upload-list__details {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
 }
 
 .upload-list__name {
@@ -141,3 +166,24 @@ body {
 .upload-list__status[data-state='error'] {
   color: #b42318;
 }
+
+.upload-list__remove {
+  border: 0;
+  background: transparent;
+  color: var(--orange);
+  font: 600 0.74rem/1 var(--font-body);
+  cursor: pointer;
+  padding: 0.2rem 0.3rem;
+}
+
+.upload-list__remove:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 460px) {
+  .upload-actions {
+    grid-template-columns: 1fr;
+  }
+}
+

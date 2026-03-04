@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type DOMWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { PHOTO_GROUPS } from '@/constants/photo-groups'
@@ -159,6 +159,16 @@ function createUploadItem(groupName: PhotoGroupName, uploaded: boolean): UploadI
   }
 }
 
+async function triggerFileSelection(input: DOMWrapper<Element>, files: File[]): Promise<void> {
+  const element = input.element as HTMLInputElement
+  Object.defineProperty(element, 'files', {
+    value: files,
+    configurable: true,
+  })
+
+  await input.trigger('change')
+}
+
 describe('IntakeFormScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -179,6 +189,86 @@ describe('IntakeFormScreen', () => {
 
     expect(submitButton.disabled).toBe(true)
     expect(wrapper.text()).toContain('Continue to Confirmation')
+  })
+
+  it('prevents duplicate uploads within the same photo group', async () => {
+    const draft = resetDraftStore()
+
+    const wrapper = mount(IntakeFormScreen, {
+      global: {
+        stubs: {
+          SectionHeader: true,
+        },
+      },
+    })
+
+    const libraryInputs = wrapper.findAll('input.upload-dropzone__input')
+    const rebarScanningInput = libraryInputs[1]
+
+    if (!rebarScanningInput) {
+      throw new Error('Expected a rebar scanning upload input.')
+    }
+
+    const firstSelection = new File(['same-photo'], 'same-photo.jpg', {
+      type: 'image/jpeg',
+      lastModified: 1,
+    })
+    const duplicateSelection = new File(['same-photo'], 'same-photo.jpg', {
+      type: 'image/jpeg',
+      lastModified: 1,
+    })
+    const uniqueSelection = new File(['different-photo'], 'different-photo.jpg', {
+      type: 'image/jpeg',
+      lastModified: 2,
+    })
+
+    await triggerFileSelection(rebarScanningInput, [firstSelection])
+    await triggerFileSelection(rebarScanningInput, [duplicateSelection, uniqueSelection])
+
+    const groupName: PhotoGroupName = 'superstructure_rebar_scanning_photos'
+    expect(draft.uploads[groupName]).toHaveLength(2)
+    expect(draft.uploads[groupName].map((item) => item.name)).toEqual([
+      'same-photo.jpg',
+      'different-photo.jpg',
+    ])
+    expect(draft.selectionWarnings[groupName]).toContain('duplicate')
+  })
+
+  it('allows the same photo file across different photo groups', async () => {
+    const draft = resetDraftStore()
+
+    const wrapper = mount(IntakeFormScreen, {
+      global: {
+        stubs: {
+          SectionHeader: true,
+        },
+      },
+    })
+
+    const libraryInputs = wrapper.findAll('input.upload-dropzone__input')
+    const rebarScanningInput = libraryInputs[1]
+    const reboundHammerInput = libraryInputs[2]
+
+    if (!rebarScanningInput || !reboundHammerInput) {
+      throw new Error('Expected upload inputs for rebar scanning and rebound hammer groups.')
+    }
+
+    const sharedPhotoForRebar = new File(['shared-photo'], 'shared-photo.jpg', {
+      type: 'image/jpeg',
+      lastModified: 9,
+    })
+    const sharedPhotoForRebound = new File(['shared-photo'], 'shared-photo.jpg', {
+      type: 'image/jpeg',
+      lastModified: 9,
+    })
+
+    await triggerFileSelection(rebarScanningInput, [sharedPhotoForRebar])
+    await triggerFileSelection(reboundHammerInput, [sharedPhotoForRebound])
+
+    expect(draft.uploads.superstructure_rebar_scanning_photos).toHaveLength(1)
+    expect(draft.uploads.superstructure_rebound_hammer_test_photos).toHaveLength(1)
+    expect(draft.selectionWarnings.superstructure_rebar_scanning_photos).toBe('')
+    expect(draft.selectionWarnings.superstructure_rebound_hammer_test_photos).toBe('')
   })
 
   it('saves completed draft and moves to confirmation', async () => {
