@@ -185,6 +185,28 @@ def test_upload_image_rejects_when_group_hits_max_limit(tmp_path: Path) -> None:
     assert second_upload.status_code == 409
 
 
+def test_upload_image_accepts_five_images_for_core_samples_group(tmp_path: Path) -> None:
+    client, _ = make_client(tmp_path)
+    create_response = client.post("/reports")
+    session_id = create_response.json()["session_id"]
+    image_bytes = build_png_bytes()
+
+    for _ in range(5):
+        response = client.post(
+            f"/reports/{session_id}/images/{PhotoGroupName.SUPERSTRUCTURE_CORE_SAMPLES_FAMILY_PIC.value}",
+            files={"image": ("core-sample.png", image_bytes, "image/png")},
+        )
+        assert response.status_code == 201
+
+    overflow_response = client.post(
+        f"/reports/{session_id}/images/{PhotoGroupName.SUPERSTRUCTURE_CORE_SAMPLES_FAMILY_PIC.value}",
+        files={"image": ("core-sample.png", image_bytes, "image/png")},
+    )
+
+    assert overflow_response.status_code == 409
+    assert "max of 5" in overflow_response.json()["detail"]
+
+
 def test_generate_report_rejects_incomplete_session(tmp_path: Path) -> None:
     client, _ = make_client(tmp_path)
     create_response = client.post("/reports")
