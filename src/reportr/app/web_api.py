@@ -288,88 +288,12 @@ def create_app(
                 detail="Report generation is already in progress.",
             )
 
-        missing_requirements = _collect_missing_requirements(session)
-        if missing_requirements:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail={
-                    "message": "Report session is incomplete.",
-                    "missing": missing_requirements,
-                },
-            )
-
-        repository.set_status(session_id, ReportStatus.GENERATING)
-
-        async with app.state.render_semaphore:
-            try:
-                latest_session = _require_session(repository, session_id)
-                pdf_bytes = await run_in_threadpool(report_renderer.render, latest_session)
-            except RendererNotReadyError as exc:
-                repository.set_status(session_id, ReportStatus.DRAFT)
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
-                ) from exc
-            except Exception:
-                repository.set_status(session_id, ReportStatus.DRAFT)
-                raise
-
-            if not pdf_bytes:
-                repository.set_status(session_id, ReportStatus.DRAFT)
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="PDF renderer returned empty output.",
-                )
-
-            repository.persist_generated_pdf(session_id, pdf_bytes)
-            repository.cleanup_session_images(session_id)
-            repository.cleanup_session_annex_documents(session_id)
-
-        return GenerateReportResponse(
-            session_id=session_id,
-            download_url=f"/reports/{session_id}/download",
-        )
-
-    @app.post(
-        "/reports/{session_id}/generate-incomplete",
-        response_model=GenerateReportResponse,
-        tags=["reports"],
-    )
-    async def generate_incomplete_report(session_id: UUID) -> GenerateReportResponse:
-        repository: ReportRepository = app.state.report_repository
-        report_renderer: ActivityReportPdfRenderer = app.state.report_renderer
-
-        session = _require_session(repository, session_id)
-
-        existing_pdf_path = repository.get_generated_pdf_path(session_id)
-        if existing_pdf_path is not None:
-            if session.status != ReportStatus.COMPLETED:
-                repository.set_status(session_id, ReportStatus.COMPLETED)
-
-            return GenerateReportResponse(
-                session_id=session_id,
-                download_url=f"/reports/{session_id}/download",
-            )
-
-        if session.status == ReportStatus.COMPLETED:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "Report was already generated, but the generated PDF is no longer available."
-                ),
-            )
-
-        if session.status == ReportStatus.GENERATING:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Report generation is already in progress.",
-            )
-
         if session.form_fields is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail={
                     "message": "Report session has no form fields. "
-                    "Form fields are required even for incomplete reports.",
+                    "Form fields are required to generate a report.",
                     "missing": {"form_fields": True},
                 },
             )
@@ -505,22 +429,7 @@ def _get_image_dimensions(source: BinaryIO) -> tuple[int, int]:
     return width, height
 
 
-def _collect_missing_requirements(session: ReportSession) -> dict[str, list[str] | bool]:
-    missing: dict[str, list[str] | bool] = {}
 
-    if session.form_fields is None:
-        missing["form_fields"] = True
-
-    missing_photo_groups: list[str] = []
-    for group_name, (minimum, _) in PHOTO_GROUP_LIMITS.items():
-        current_count = len(session.images.get(group_name.value, []))
-        if current_count < minimum:
-            missing_photo_groups.append(group_name.value)
-
-    if missing_photo_groups:
-        missing["photo_groups"] = missing_photo_groups
-
-    return missing
 
 
 def _resolve_default_data_root() -> Path:

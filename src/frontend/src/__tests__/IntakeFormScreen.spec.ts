@@ -398,6 +398,71 @@ describe('IntakeFormScreen', () => {
     expect(routerPushMock).toHaveBeenCalledWith({ name: 'confirmation' })
   })
 
+  it('enables submit when substructure fields are empty', async () => {
+    const draft = resetDraftStore()
+
+    Object.assign(draft.form.building_details, {
+      testing_date: '2026-02',
+      building_name: 'Acacia Residences',
+      building_location: 'Makati City',
+      number_of_storey: 12,
+    })
+    Object.assign(draft.form.superstructure.rebar_scanning, {
+      number_of_rebar_scan_locations: 3,
+    })
+    Object.assign(draft.form.superstructure.rebound_hammer_test, {
+      number_of_rebound_hammer_test_locations: 4,
+    })
+    Object.assign(draft.form.superstructure.concrete_core_extraction, {
+      number_of_coring_locations: 2,
+    })
+    Object.assign(draft.form.superstructure.rebar_extraction, {
+      number_of_rebar_samples_extracted: 2,
+    })
+    Object.assign(draft.form.superstructure.restoration_works, {
+      non_shrink_grout_product_used: 'SikaGrout 214',
+      epoxy_ab_used: 'Sikadur-31',
+    })
+    Object.assign(draft.form.signature, {
+      prepared_by: 'Jane Dela Cruz',
+      prepared_by_role: 'Structural Engineer',
+    })
+
+    // substructure fields intentionally left at defaults (0)
+
+    for (const group of PHOTO_GROUPS) {
+      draft.uploads[group.name] = [createUploadItem(group.name, true)]
+    }
+
+    createReportSessionMock.mockResolvedValue({
+      session_id: 'session-no-sub',
+      status: 'draft',
+    })
+    saveReportFormFieldsMock.mockResolvedValue({})
+
+    const wrapper = mount(IntakeFormScreen, {
+      global: {
+        stubs: {
+          ImageUploadField: true,
+          PdfUploadField: true,
+          SectionHeader: true,
+        },
+      },
+    })
+
+    const submitButton = wrapper.get('button[type="submit"]').element as HTMLButtonElement
+    expect(submitButton.disabled).toBe(false)
+
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(createReportSessionMock).toHaveBeenCalledTimes(1)
+    expect(saveReportFormFieldsMock).toHaveBeenCalledTimes(1)
+    expect(routerPushMock).toHaveBeenCalledWith({ name: 'confirmation' })
+    expect(draft.sessionId.value).toBe('session-no-sub')
+    expect(draft.confirmationReady.value).toBe(true)
+  })
+
   it('uploads selected annex PDFs when provided', async () => {
     const draft = resetDraftStore()
     fillRequiredForm(draft.form)

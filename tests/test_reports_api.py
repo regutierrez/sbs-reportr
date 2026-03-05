@@ -254,7 +254,7 @@ def test_upload_annex_document_rejects_invalid_pdf(tmp_path: Path) -> None:
     assert response.json()["detail"] == "Uploaded file is not a valid PDF."
 
 
-def test_generate_report_rejects_incomplete_session(tmp_path: Path) -> None:
+def test_generate_report_rejects_missing_form_fields(tmp_path: Path) -> None:
     client, _ = make_client(tmp_path)
     create_response = client.post("/reports")
     session_id = create_response.json()["session_id"]
@@ -264,7 +264,6 @@ def test_generate_report_rejects_incomplete_session(tmp_path: Path) -> None:
     assert response.status_code == 422
     detail = response.json()["detail"]
     assert detail["missing"]["form_fields"] is True
-    assert PhotoGroupName.BUILDING_DETAILS_BUILDING_PHOTO.value in detail["missing"]["photo_groups"]
 
 
 def test_download_report_returns_not_found_when_not_generated(tmp_path: Path) -> None:
@@ -394,7 +393,7 @@ def test_generate_report_returns_conflict_when_completed_pdf_is_missing(tmp_path
     assert renderer.render_call_count == 1
 
 
-def test_generate_incomplete_report_succeeds_without_photos(tmp_path: Path) -> None:
+def test_generate_report_succeeds_without_photos(tmp_path: Path) -> None:
     renderer = StubRenderer(output=b"%PDF-1.7\nincomplete")
     client, repository = make_client(tmp_path, renderer=renderer)
 
@@ -404,7 +403,7 @@ def test_generate_incomplete_report_succeeds_without_photos(tmp_path: Path) -> N
     form_response = client.put(f"/reports/{session_id}", json=build_form_payload())
     assert form_response.status_code == 200
 
-    response = client.post(f"/reports/{session_id}/generate-incomplete")
+    response = client.post(f"/reports/{session_id}/generate")
 
     assert response.status_code == 200
     response_payload = response.json()
@@ -417,40 +416,7 @@ def test_generate_incomplete_report_succeeds_without_photos(tmp_path: Path) -> N
     assert renderer.render_call_count == 1
 
 
-def test_generate_incomplete_report_rejects_missing_form_fields(tmp_path: Path) -> None:
-    renderer = StubRenderer(output=b"%PDF-1.7\nincomplete")
-    client, _ = make_client(tmp_path, renderer=renderer)
-
-    create_response = client.post("/reports")
-    session_id = create_response.json()["session_id"]
-
-    response = client.post(f"/reports/{session_id}/generate-incomplete")
-
-    assert response.status_code == 422
-    detail = response.json()["detail"]
-    assert detail["missing"]["form_fields"] is True
-    assert renderer.render_call_count == 0
-
-
-def test_generate_incomplete_report_returns_conflict_when_already_generating(
-    tmp_path: Path,
-) -> None:
-    renderer = StubRenderer(output=b"%PDF-1.7\nincomplete")
-    client, repository = make_client(tmp_path, renderer=renderer)
-
-    create_response = client.post("/reports")
-    session_id = UUID(create_response.json()["session_id"])
-
-    client.put(f"/reports/{session_id}", json=build_form_payload())
-    repository.set_status(session_id, ReportStatus.GENERATING)
-
-    response = client.post(f"/reports/{session_id}/generate-incomplete")
-
-    assert response.status_code == 409
-    assert renderer.render_call_count == 0
-
-
-def test_generate_incomplete_report_with_partial_photos(tmp_path: Path) -> None:
+def test_generate_report_with_partial_photos(tmp_path: Path) -> None:
     renderer = StubRenderer(output=b"%PDF-1.7\npartial")
     client, _ = make_client(tmp_path, renderer=renderer)
 
@@ -472,7 +438,7 @@ def test_generate_incomplete_report_with_partial_photos(tmp_path: Path) -> None:
     )
     assert upload_response.status_code == 201
 
-    response = client.post(f"/reports/{session_id}/generate-incomplete")
+    response = client.post(f"/reports/{session_id}/generate")
 
     assert response.status_code == 200
     assert renderer.render_call_count == 1

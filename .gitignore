@@ -20,3 +20,4 @@ src/data/
 data/dummy_sessions**
 extracted_images/
 dummy_report.pdf
+package-lock.json

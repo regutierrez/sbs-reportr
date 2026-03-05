@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref } from "vue";
+import { useRouter } from "vue-router";
 
 import {
   ApiError,
@@ -8,21 +8,21 @@ import {
   saveReportFormFields,
   uploadReportAnnexPdf,
   uploadReportImage,
-} from '@/api'
-import ImageUploadField from '@/components/ImageUploadField.vue'
-import PdfUploadField from '@/components/PdfUploadField.vue'
-import SectionHeader from '@/components/SectionHeader.vue'
+} from "@/api";
+import ImageUploadField from "@/components/ImageUploadField.vue";
+import PdfUploadField from "@/components/PdfUploadField.vue";
+import SectionHeader from "@/components/SectionHeader.vue";
 import {
   useReportIntakeDraft,
   type AnnexUploadItem,
   type UploadItem,
-} from '@/composables/use-report-intake-draft'
-import { ANNEX_GROUPS, type AnnexGroupConfig } from '@/constants/annex-groups'
-import { PHOTO_GROUPS, type PhotoGroupConfig } from '@/constants/photo-groups'
-import type { AnnexGroupName, PhotoGroupName, ReportFormFields } from '@/types/report'
-import { compressImageForUpload } from '@/utils/image-compression'
+} from "@/composables/use-report-intake-draft";
+import { ANNEX_GROUPS, type AnnexGroupConfig } from "@/constants/annex-groups";
+import { PHOTO_GROUPS, type PhotoGroupConfig } from "@/constants/photo-groups";
+import type { AnnexGroupName, PhotoGroupName, ReportFormFields } from "@/types/report";
+import { compressImageForUpload } from "@/utils/image-compression";
 
-const router = useRouter()
+const router = useRouter();
 const {
   annexSelectionWarnings,
   annexUploads,
@@ -32,106 +32,99 @@ const {
   selectionWarnings,
   sessionId,
   uploads,
-} = useReportIntakeDraft()
+} = useReportIntakeDraft();
 
-const isSubmitting = ref(false)
-const submitError = ref('')
-const submitSuccess = ref('')
+const isSubmitting = ref(false);
+const submitError = ref("");
+const submitSuccess = ref("");
 
 const fieldErrors = computed<Record<string, string>>(() => {
-  const errors: Record<string, string> = {}
+  const errors: Record<string, string> = {};
 
   if (!/^\d{4}-\d{2}$/.test(form.building_details.testing_date)) {
-    errors.testing_date = 'Testing date is required.'
+    errors.testing_date = "Testing date is required.";
   }
   if (!form.building_details.building_name.trim()) {
-    errors.building_name = 'Building name is required.'
+    errors.building_name = "Building name is required.";
   }
   if (!form.building_details.building_location.trim()) {
-    errors.building_location = 'Building location is required.'
+    errors.building_location = "Building location is required.";
   }
   if (form.building_details.number_of_storey < 1) {
-    errors.number_of_storey = 'Number of storey must be at least 1.'
+    errors.number_of_storey = "Number of storey must be at least 1.";
   }
 
   if (form.superstructure.rebar_scanning.number_of_rebar_scan_locations < 1) {
-    errors.number_of_rebar_scan_locations = 'Rebar scan locations must be at least 1.'
+    errors.number_of_rebar_scan_locations = "Rebar scan locations must be at least 1.";
   }
   if (form.superstructure.rebound_hammer_test.number_of_rebound_hammer_test_locations < 1) {
     errors.number_of_rebound_hammer_test_locations =
-      'Rebound hammer test locations must be at least 1.'
+      "Rebound hammer test locations must be at least 1.";
   }
   if (form.superstructure.concrete_core_extraction.number_of_coring_locations < 1) {
-    errors.number_of_coring_locations = 'Coring locations must be at least 1.'
+    errors.number_of_coring_locations = "Coring locations must be at least 1.";
   }
   if (form.superstructure.rebar_extraction.number_of_rebar_samples_extracted < 1) {
-    errors.number_of_rebar_samples_extracted = 'Rebar samples must be at least 1.'
+    errors.number_of_rebar_samples_extracted = "Rebar samples must be at least 1.";
   }
   if (!form.superstructure.restoration_works.non_shrink_grout_product_used.trim()) {
-    errors.non_shrink_grout_product_used = 'Non-shrink grout product is required.'
+    errors.non_shrink_grout_product_used = "Non-shrink grout product is required.";
   }
   if (!form.superstructure.restoration_works.epoxy_ab_used.trim()) {
-    errors.epoxy_ab_used = 'Epoxy A&B product is required.'
-  }
-
-  if (form.substructure.concrete_core_extraction.number_of_foundation_locations < 1) {
-    errors.number_of_foundation_locations = 'Foundation locations must be at least 1.'
-  }
-  if (form.substructure.concrete_core_extraction.number_of_foundation_cores_extracted < 1) {
-    errors.number_of_foundation_cores_extracted = 'Foundation cores extracted must be at least 1.'
+    errors.epoxy_ab_used = "Epoxy A&B product is required.";
   }
 
   if (!form.signature.prepared_by.trim()) {
-    errors.prepared_by = 'Prepared by is required.'
+    errors.prepared_by = "Prepared by is required.";
   }
   if (!form.signature.prepared_by_role.trim()) {
-    errors.prepared_by_role = 'Role is required.'
+    errors.prepared_by_role = "Role is required.";
   }
 
-  return errors
-})
+  return errors;
+});
 
 const missingPhotoGroupLabels = computed(() => {
   return PHOTO_GROUPS.filter((group) => uploads[group.name].length < group.min).map(
     (group) => group.label,
-  )
-})
+  );
+});
 
 const canSubmit = computed(() => {
   return (
     Object.keys(fieldErrors.value).length === 0 &&
     missingPhotoGroupLabels.value.length === 0 &&
     !isSubmitting.value
-  )
-})
+  );
+});
 
 const photoGroupsByName = PHOTO_GROUPS.reduce(
   (accumulator, group) => {
-    accumulator[group.name] = group
-    return accumulator
+    accumulator[group.name] = group;
+    return accumulator;
   },
   {} as Record<PhotoGroupName, PhotoGroupConfig>,
-)
+);
 
 const annexGroupsByName = ANNEX_GROUPS.reduce(
   (accumulator, group) => {
-    accumulator[group.name] = group
-    return accumulator
+    accumulator[group.name] = group;
+    return accumulator;
   },
   {} as Record<AnnexGroupName, AnnexGroupConfig>,
-)
+);
 
 function createItemId(): string {
-  if (globalThis.crypto && 'randomUUID' in globalThis.crypto) {
-    return globalThis.crypto.randomUUID()
+  if (globalThis.crypto && "randomUUID" in globalThis.crypto) {
+    return globalThis.crypto.randomUUID();
   }
 
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function releasePreviewUrl(previewUrl: string): void {
-  if (previewUrl.startsWith('blob:')) {
-    URL.revokeObjectURL(previewUrl)
+  if (previewUrl.startsWith("blob:")) {
+    URL.revokeObjectURL(previewUrl);
   }
 }
 
@@ -141,10 +134,10 @@ function createUploadItem(file: File): UploadItem {
     name: file.name,
     file,
     previewUrl: URL.createObjectURL(file),
-    status: 'pending',
-    message: 'Queued',
+    status: "pending",
+    message: "Queued",
     uploadedImage: null,
-  }
+  };
 }
 
 function createAnnexUploadItem(file: File): AnnexUploadItem {
@@ -152,61 +145,64 @@ function createAnnexUploadItem(file: File): AnnexUploadItem {
     id: createItemId(),
     name: file.name,
     file,
-    status: 'pending',
-    message: 'Queued',
+    status: "pending",
+    message: "Queued",
     uploadedDocument: null,
-  }
+  };
 }
 
 function createFileFingerprint(file: File): string {
-  return `${file.name}:${file.size}:${file.type}`
+  return `${file.name}:${file.size}:${file.type}`;
 }
 
 function onFilesSelected(group: PhotoGroupConfig, files: File[]): void {
   if (group.max === 1) {
-    const [firstFile] = files
+    const [firstFile] = files;
 
     if (!firstFile) {
-      selectionWarnings[group.name] = ''
-      return
+      selectionWarnings[group.name] = "";
+      return;
     }
 
-    uploads[group.name].forEach((item) => releasePreviewUrl(item.previewUrl))
-    uploads[group.name] = [createUploadItem(firstFile)]
-    selectionWarnings[group.name] = files.length > 1 ? 'Only 1 photo is allowed for this group.' : ''
-    return
+    uploads[group.name].forEach((item) => releasePreviewUrl(item.previewUrl));
+    uploads[group.name] = [createUploadItem(firstFile)];
+    selectionWarnings[group.name] =
+      files.length > 1 ? "Only 1 photo is allowed for this group." : "";
+    return;
   }
 
-  const existingItems = uploads[group.name]
-  const remainingSlots = Math.max(0, group.max - existingItems.length)
-  const existingFingerprints = new Set(existingItems.map((item) => createFileFingerprint(item.file)))
-  const selectedFingerprints = new Set<string>()
+  const existingItems = uploads[group.name];
+  const remainingSlots = Math.max(0, group.max - existingItems.length);
+  const existingFingerprints = new Set(
+    existingItems.map((item) => createFileFingerprint(item.file)),
+  );
+  const selectedFingerprints = new Set<string>();
 
-  const filesWithoutDuplicates: File[] = []
-  let duplicateCount = 0
+  const filesWithoutDuplicates: File[] = [];
+  let duplicateCount = 0;
 
   for (const file of files) {
-    const fingerprint = createFileFingerprint(file)
+    const fingerprint = createFileFingerprint(file);
 
     if (existingFingerprints.has(fingerprint) || selectedFingerprints.has(fingerprint)) {
-      duplicateCount += 1
-      continue
+      duplicateCount += 1;
+      continue;
     }
 
-    selectedFingerprints.add(fingerprint)
-    filesWithoutDuplicates.push(file)
+    selectedFingerprints.add(fingerprint);
+    filesWithoutDuplicates.push(file);
   }
 
-  const filesToAdd = filesWithoutDuplicates.slice(0, remainingSlots)
-  const newItems: UploadItem[] = filesToAdd.map((file): UploadItem => createUploadItem(file))
-  uploads[group.name] = [...existingItems, ...newItems]
+  const filesToAdd = filesWithoutDuplicates.slice(0, remainingSlots);
+  const newItems: UploadItem[] = filesToAdd.map((file): UploadItem => createUploadItem(file));
+  uploads[group.name] = [...existingItems, ...newItems];
 
-  const warnings: string[] = []
+  const warnings: string[] = [];
 
   if (duplicateCount > 0) {
     warnings.push(
-      `${duplicateCount} duplicate photo${duplicateCount === 1 ? '' : 's'} skipped for this field.`,
-    )
+      `${duplicateCount} duplicate photo${duplicateCount === 1 ? "" : "s"} skipped for this field.`,
+    );
   }
 
   if (filesWithoutDuplicates.length > filesToAdd.length) {
@@ -214,85 +210,87 @@ function onFilesSelected(group: PhotoGroupConfig, files: File[]): void {
       remainingSlots === 0
         ? `This group already has ${group.max} photo(s). Remove one to add another.`
         : `Only ${filesToAdd.length} additional photo(s) were added. Max for this group is ${group.max}.`,
-    )
+    );
   }
 
-  selectionWarnings[group.name] = warnings.join(' ')
+  selectionWarnings[group.name] = warnings.join(" ");
 }
 
 function onUploadItemRemoved(group: PhotoGroupConfig, itemId: string): void {
   uploads[group.name] = uploads[group.name].filter((item) => {
     if (item.id !== itemId) {
-      return true
+      return true;
     }
 
-    releasePreviewUrl(item.previewUrl)
-    return false
-  })
+    releasePreviewUrl(item.previewUrl);
+    return false;
+  });
 
-  selectionWarnings[group.name] = ''
+  selectionWarnings[group.name] = "";
 }
 
 function photoGroupError(group: PhotoGroupConfig): string {
   const minRequirementError =
-    uploads[group.name].length < group.min ? `Add at least ${group.min} photo(s).` : ''
-  const selectionWarning = selectionWarnings[group.name]
+    uploads[group.name].length < group.min ? `Add at least ${group.min} photo(s).` : "";
+  const selectionWarning = selectionWarnings[group.name];
 
   if (minRequirementError && selectionWarning) {
-    return `${minRequirementError} ${selectionWarning}`
+    return `${minRequirementError} ${selectionWarning}`;
   }
 
-  return minRequirementError || selectionWarning
+  return minRequirementError || selectionWarning;
 }
 
 function onAnnexFilesSelected(group: AnnexGroupConfig, files: File[]): void {
-  const [firstFile] = files
+  const [firstFile] = files;
 
   if (!firstFile) {
-    annexSelectionWarnings[group.name] = ''
-    return
+    annexSelectionWarnings[group.name] = "";
+    return;
   }
 
-  const isPdfFile = firstFile.type === 'application/pdf' || firstFile.name.toLowerCase().endsWith('.pdf')
+  const isPdfFile =
+    firstFile.type === "application/pdf" || firstFile.name.toLowerCase().endsWith(".pdf");
   if (!isPdfFile) {
-    annexSelectionWarnings[group.name] = 'Only PDF files are allowed for ANNEX uploads.'
-    return
+    annexSelectionWarnings[group.name] = "Only PDF files are allowed for ANNEX uploads.";
+    return;
   }
 
-  annexUploads[group.name] = [createAnnexUploadItem(firstFile)]
-  annexSelectionWarnings[group.name] = files.length > 1 ? 'Only 1 PDF is allowed for this subsection.' : ''
+  annexUploads[group.name] = [createAnnexUploadItem(firstFile)];
+  annexSelectionWarnings[group.name] =
+    files.length > 1 ? "Only 1 PDF is allowed for this subsection." : "";
 }
 
 function onAnnexUploadItemRemoved(group: AnnexGroupConfig, itemId: string): void {
-  annexUploads[group.name] = annexUploads[group.name].filter((item) => item.id !== itemId)
-  annexSelectionWarnings[group.name] = ''
+  annexUploads[group.name] = annexUploads[group.name].filter((item) => item.id !== itemId);
+  annexSelectionWarnings[group.name] = "";
 }
 
 function annexGroupError(group: AnnexGroupConfig): string {
-  return annexSelectionWarnings[group.name]
+  return annexSelectionWarnings[group.name];
 }
 
 function normalizeErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    if (typeof error.detail === 'string') {
-      return error.detail
+    if (typeof error.detail === "string") {
+      return error.detail;
     }
 
-    if (error.detail && typeof error.detail === 'object' && 'message' in error.detail) {
-      const detail = error.detail as { message?: unknown }
-      if (typeof detail.message === 'string') {
-        return detail.message
+    if (error.detail && typeof error.detail === "object" && "message" in error.detail) {
+      const detail = error.detail as { message?: unknown };
+      if (typeof detail.message === "string") {
+        return detail.message;
       }
     }
 
-    return `Request failed (${error.status}).`
+    return `Request failed (${error.status}).`;
   }
 
   if (error instanceof Error) {
-    return error.message
+    return error.message;
   }
 
-  return 'Unexpected error while uploading report data.'
+  return "Unexpected error while uploading report data.";
 }
 
 function buildFormPayload(): ReportFormFields {
@@ -305,14 +303,16 @@ function buildFormPayload(): ReportFormFields {
     },
     superstructure: {
       rebar_scanning: {
-        number_of_rebar_scan_locations: form.superstructure.rebar_scanning.number_of_rebar_scan_locations,
+        number_of_rebar_scan_locations:
+          form.superstructure.rebar_scanning.number_of_rebar_scan_locations,
       },
       rebound_hammer_test: {
         number_of_rebound_hammer_test_locations:
           form.superstructure.rebound_hammer_test.number_of_rebound_hammer_test_locations,
       },
       concrete_core_extraction: {
-        number_of_coring_locations: form.superstructure.concrete_core_extraction.number_of_coring_locations,
+        number_of_coring_locations:
+          form.superstructure.concrete_core_extraction.number_of_coring_locations,
       },
       rebar_extraction: {
         number_of_rebar_samples_extracted:
@@ -336,7 +336,7 @@ function buildFormPayload(): ReportFormFields {
       prepared_by: form.signature.prepared_by.trim(),
       prepared_by_role: form.signature.prepared_by_role.trim(),
     },
-  }
+  };
 }
 
 async function uploadGroupItem(
@@ -345,27 +345,27 @@ async function uploadGroupItem(
   item: UploadItem,
 ): Promise<void> {
   if (item.uploadedImage) {
-    item.status = 'uploaded'
-    item.message = 'Uploaded'
-    return
+    item.status = "uploaded";
+    item.message = "Uploaded";
+    return;
   }
 
   try {
-    item.status = 'compressing'
-    item.message = 'Compressing...'
-    const compressedFile = await compressImageForUpload(item.file)
+    item.status = "compressing";
+    item.message = "Compressing...";
+    const compressedFile = await compressImageForUpload(item.file);
 
-    item.status = 'uploading'
-    item.message = 'Uploading...'
-    const uploadResult = await uploadReportImage(currentSessionId, groupName, compressedFile)
+    item.status = "uploading";
+    item.message = "Uploading...";
+    const uploadResult = await uploadReportImage(currentSessionId, groupName, compressedFile);
 
-    item.uploadedImage = uploadResult.image
-    item.status = 'uploaded'
-    item.message = 'Uploaded'
+    item.uploadedImage = uploadResult.image;
+    item.status = "uploaded";
+    item.message = "Uploaded";
   } catch (error) {
-    item.status = 'error'
-    item.message = normalizeErrorMessage(error)
-    throw error
+    item.status = "error";
+    item.message = normalizeErrorMessage(error);
+    throw error;
   }
 }
 
@@ -375,80 +375,80 @@ async function uploadAnnexGroupItem(
   item: AnnexUploadItem,
 ): Promise<void> {
   if (item.uploadedDocument) {
-    item.status = 'uploaded'
-    item.message = 'Uploaded'
-    return
+    item.status = "uploaded";
+    item.message = "Uploaded";
+    return;
   }
 
   try {
-    item.status = 'uploading'
-    item.message = 'Uploading...'
-    const uploadResult = await uploadReportAnnexPdf(currentSessionId, groupName, item.file)
+    item.status = "uploading";
+    item.message = "Uploading...";
+    const uploadResult = await uploadReportAnnexPdf(currentSessionId, groupName, item.file);
 
-    item.uploadedDocument = uploadResult.document
-    item.status = 'uploaded'
-    item.message = 'Uploaded'
+    item.uploadedDocument = uploadResult.document;
+    item.status = "uploaded";
+    item.message = "Uploaded";
   } catch (error) {
-    item.status = 'error'
-    item.message = normalizeErrorMessage(error)
-    throw error
+    item.status = "error";
+    item.message = normalizeErrorMessage(error);
+    throw error;
   }
 }
 
 async function submitIntake(): Promise<void> {
   if (!canSubmit.value) {
-    return
+    return;
   }
 
-  isSubmitting.value = true
-  submitError.value = ''
-  submitSuccess.value = ''
-  confirmationReady.value = false
-  generatedDownloadUrl.value = null
+  isSubmitting.value = true;
+  submitError.value = "";
+  submitSuccess.value = "";
+  confirmationReady.value = false;
+  generatedDownloadUrl.value = null;
 
   try {
     if (!sessionId.value) {
-      const createdSession = await createReportSession()
-      sessionId.value = createdSession.session_id
+      const createdSession = await createReportSession();
+      sessionId.value = createdSession.session_id;
     }
 
     if (!sessionId.value) {
-      throw new Error('Unable to initialize report session.')
+      throw new Error("Unable to initialize report session.");
     }
 
-    await saveReportFormFields(sessionId.value, buildFormPayload())
+    await saveReportFormFields(sessionId.value, buildFormPayload());
 
-    const uploadJobs: Promise<void>[] = []
+    const uploadJobs: Promise<void>[] = [];
     for (const group of PHOTO_GROUPS) {
       for (const item of uploads[group.name]) {
-        uploadJobs.push(uploadGroupItem(sessionId.value, group.name, item))
+        uploadJobs.push(uploadGroupItem(sessionId.value, group.name, item));
       }
     }
     for (const group of ANNEX_GROUPS) {
       for (const item of annexUploads[group.name]) {
-        uploadJobs.push(uploadAnnexGroupItem(sessionId.value, group.name, item))
+        uploadJobs.push(uploadAnnexGroupItem(sessionId.value, group.name, item));
       }
     }
 
-    const uploadResults = await Promise.allSettled(uploadJobs)
+    const uploadResults = await Promise.allSettled(uploadJobs);
     const failedUploads = uploadResults.filter(
-      (result): result is PromiseRejectedResult => result.status === 'rejected',
-    )
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
 
     if (failedUploads.length > 0) {
       throw new Error(
-        `${failedUploads.length} upload${failedUploads.length === 1 ? '' : 's'} failed. ` +
-          'Fix the items marked in red and retry.',
-      )
+        `${failedUploads.length} upload${failedUploads.length === 1 ? "" : "s"} failed. ` +
+          "Fix the items marked in red and retry.",
+      );
     }
 
-    submitSuccess.value = `Draft saved and files uploaded. Session ${sessionId.value}.`
-    confirmationReady.value = true
-    void router.push({ name: 'confirmation' })
+    submitSuccess.value = `Draft saved and files uploaded. Session ${sessionId.value}.`;
+    confirmationReady.value = true;
+    void router.push({ name: "confirmation" });
   } catch (error) {
-    submitError.value = normalizeErrorMessage(error)
+    submitError.value = normalizeErrorMessage(error);
   } finally {
-    isSubmitting.value = false
+    isSubmitting.value = false;
   }
 }
 </script>
@@ -470,13 +470,21 @@ async function submitIntake(): Promise<void> {
           <label class="field">
             <span class="field__label">Testing Date (Month YYYY)</span>
             <input v-model="form.building_details.testing_date" class="field__input" type="month" />
-            <span v-if="fieldErrors.testing_date" class="field__error">{{ fieldErrors.testing_date }}</span>
+            <span v-if="fieldErrors.testing_date" class="field__error">{{
+              fieldErrors.testing_date
+            }}</span>
           </label>
 
           <label class="field">
             <span class="field__label">Building Name</span>
-            <input v-model="form.building_details.building_name" class="field__input" maxlength="200" />
-            <span v-if="fieldErrors.building_name" class="field__error">{{ fieldErrors.building_name }}</span>
+            <input
+              v-model="form.building_details.building_name"
+              class="field__input"
+              maxlength="200"
+            />
+            <span v-if="fieldErrors.building_name" class="field__error">{{
+              fieldErrors.building_name
+            }}</span>
           </label>
 
           <label class="field field--full">
@@ -486,7 +494,9 @@ async function submitIntake(): Promise<void> {
               class="field__input field__textarea"
               maxlength="500"
             />
-            <span v-if="fieldErrors.building_location" class="field__error">{{ fieldErrors.building_location }}</span>
+            <span v-if="fieldErrors.building_location" class="field__error">{{
+              fieldErrors.building_location
+            }}</span>
           </label>
 
           <label class="field">
@@ -497,7 +507,9 @@ async function submitIntake(): Promise<void> {
               type="number"
               min="1"
             />
-            <span v-if="fieldErrors.number_of_storey" class="field__error">{{ fieldErrors.number_of_storey }}</span>
+            <span v-if="fieldErrors.number_of_storey" class="field__error">{{
+              fieldErrors.number_of_storey
+            }}</span>
           </label>
         </div>
 
@@ -510,8 +522,13 @@ async function submitIntake(): Promise<void> {
             :items="uploads.building_details_building_photo"
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.building_details_building_photo)"
-            @select="(files) => onFilesSelected(photoGroupsByName.building_details_building_photo, files)"
-            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.building_details_building_photo, itemId)"
+            @select="
+              (files) => onFilesSelected(photoGroupsByName.building_details_building_photo, files)
+            "
+            @remove="
+              (itemId) =>
+                onUploadItemRemoved(photoGroupsByName.building_details_building_photo, itemId)
+            "
           />
         </div>
       </section>
@@ -542,8 +559,14 @@ async function submitIntake(): Promise<void> {
             :items="uploads.superstructure_rebar_scanning_photos"
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_rebar_scanning_photos)"
-            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_rebar_scanning_photos, files)"
-            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_rebar_scanning_photos, itemId)"
+            @select="
+              (files) =>
+                onFilesSelected(photoGroupsByName.superstructure_rebar_scanning_photos, files)
+            "
+            @remove="
+              (itemId) =>
+                onUploadItemRemoved(photoGroupsByName.superstructure_rebar_scanning_photos, itemId)
+            "
           />
         </div>
       </section>
@@ -554,7 +577,9 @@ async function submitIntake(): Promise<void> {
           <label class="field">
             <span class="field__label">Number of rebound hammer test locations</span>
             <input
-              v-model.number="form.superstructure.rebound_hammer_test.number_of_rebound_hammer_test_locations"
+              v-model.number="
+                form.superstructure.rebound_hammer_test.number_of_rebound_hammer_test_locations
+              "
               class="field__input"
               type="number"
               min="1"
@@ -574,8 +599,17 @@ async function submitIntake(): Promise<void> {
             :items="uploads.superstructure_rebound_hammer_test_photos"
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_rebound_hammer_test_photos)"
-            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_rebound_hammer_test_photos, files)"
-            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_rebound_hammer_test_photos, itemId)"
+            @select="
+              (files) =>
+                onFilesSelected(photoGroupsByName.superstructure_rebound_hammer_test_photos, files)
+            "
+            @remove="
+              (itemId) =>
+                onUploadItemRemoved(
+                  photoGroupsByName.superstructure_rebound_hammer_test_photos,
+                  itemId,
+                )
+            "
           />
         </div>
       </section>
@@ -586,7 +620,9 @@ async function submitIntake(): Promise<void> {
           <label class="field">
             <span class="field__label">Number of coring locations</span>
             <input
-              v-model.number="form.superstructure.concrete_core_extraction.number_of_coring_locations"
+              v-model.number="
+                form.superstructure.concrete_core_extraction.number_of_coring_locations
+              "
               class="field__input"
               type="number"
               min="1"
@@ -606,8 +642,14 @@ async function submitIntake(): Promise<void> {
             :items="uploads.superstructure_concrete_coring_photos"
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_concrete_coring_photos)"
-            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_concrete_coring_photos, files)"
-            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_concrete_coring_photos, itemId)"
+            @select="
+              (files) =>
+                onFilesSelected(photoGroupsByName.superstructure_concrete_coring_photos, files)
+            "
+            @remove="
+              (itemId) =>
+                onUploadItemRemoved(photoGroupsByName.superstructure_concrete_coring_photos, itemId)
+            "
           />
           <ImageUploadField
             :label="photoGroupsByName.superstructure_core_samples_family_pic.label"
@@ -617,8 +659,17 @@ async function submitIntake(): Promise<void> {
             :items="uploads.superstructure_core_samples_family_pic"
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_core_samples_family_pic)"
-            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_core_samples_family_pic, files)"
-            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_core_samples_family_pic, itemId)"
+            @select="
+              (files) =>
+                onFilesSelected(photoGroupsByName.superstructure_core_samples_family_pic, files)
+            "
+            @remove="
+              (itemId) =>
+                onUploadItemRemoved(
+                  photoGroupsByName.superstructure_core_samples_family_pic,
+                  itemId,
+                )
+            "
           />
         </div>
       </section>
@@ -629,7 +680,9 @@ async function submitIntake(): Promise<void> {
           <label class="field">
             <span class="field__label">Number of rebar samples</span>
             <input
-              v-model.number="form.superstructure.rebar_extraction.number_of_rebar_samples_extracted"
+              v-model.number="
+                form.superstructure.rebar_extraction.number_of_rebar_samples_extracted
+              "
               class="field__input"
               type="number"
               min="1"
@@ -649,8 +702,17 @@ async function submitIntake(): Promise<void> {
             :items="uploads.superstructure_rebar_extraction_photos"
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_rebar_extraction_photos)"
-            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_rebar_extraction_photos, files)"
-            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_rebar_extraction_photos, itemId)"
+            @select="
+              (files) =>
+                onFilesSelected(photoGroupsByName.superstructure_rebar_extraction_photos, files)
+            "
+            @remove="
+              (itemId) =>
+                onUploadItemRemoved(
+                  photoGroupsByName.superstructure_rebar_extraction_photos,
+                  itemId,
+                )
+            "
           />
           <ImageUploadField
             :label="photoGroupsByName.superstructure_rebar_samples_family_pic.label"
@@ -660,8 +722,17 @@ async function submitIntake(): Promise<void> {
             :items="uploads.superstructure_rebar_samples_family_pic"
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_rebar_samples_family_pic)"
-            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_rebar_samples_family_pic, files)"
-            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_rebar_samples_family_pic, itemId)"
+            @select="
+              (files) =>
+                onFilesSelected(photoGroupsByName.superstructure_rebar_samples_family_pic, files)
+            "
+            @remove="
+              (itemId) =>
+                onUploadItemRemoved(
+                  photoGroupsByName.superstructure_rebar_samples_family_pic,
+                  itemId,
+                )
+            "
           />
         </div>
       </section>
@@ -677,8 +748,17 @@ async function submitIntake(): Promise<void> {
             :items="uploads.superstructure_chipping_of_slab_photos"
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_chipping_of_slab_photos)"
-            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_chipping_of_slab_photos, files)"
-            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_chipping_of_slab_photos, itemId)"
+            @select="
+              (files) =>
+                onFilesSelected(photoGroupsByName.superstructure_chipping_of_slab_photos, files)
+            "
+            @remove="
+              (itemId) =>
+                onUploadItemRemoved(
+                  photoGroupsByName.superstructure_chipping_of_slab_photos,
+                  itemId,
+                )
+            "
           />
         </div>
       </section>
@@ -705,7 +785,9 @@ async function submitIntake(): Promise<void> {
               class="field__input"
               maxlength="200"
             />
-            <span v-if="fieldErrors.epoxy_ab_used" class="field__error">{{ fieldErrors.epoxy_ab_used }}</span>
+            <span v-if="fieldErrors.epoxy_ab_used" class="field__error">{{
+              fieldErrors.epoxy_ab_used
+            }}</span>
           </label>
         </div>
 
@@ -718,8 +800,13 @@ async function submitIntake(): Promise<void> {
             :items="uploads.superstructure_restoration_photos"
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.superstructure_restoration_photos)"
-            @select="(files) => onFilesSelected(photoGroupsByName.superstructure_restoration_photos, files)"
-            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.superstructure_restoration_photos, itemId)"
+            @select="
+              (files) => onFilesSelected(photoGroupsByName.superstructure_restoration_photos, files)
+            "
+            @remove="
+              (itemId) =>
+                onUploadItemRemoved(photoGroupsByName.superstructure_restoration_photos, itemId)
+            "
           />
         </div>
       </section>
@@ -730,7 +817,9 @@ async function submitIntake(): Promise<void> {
           <label class="field">
             <span class="field__label">Number of selected foundation locations</span>
             <input
-              v-model.number="form.substructure.concrete_core_extraction.number_of_foundation_locations"
+              v-model.number="
+                form.substructure.concrete_core_extraction.number_of_foundation_locations
+              "
               class="field__input"
               type="number"
               min="1"
@@ -743,7 +832,9 @@ async function submitIntake(): Promise<void> {
           <label class="field">
             <span class="field__label">Number of extracted cores</span>
             <input
-              v-model.number="form.substructure.concrete_core_extraction.number_of_foundation_cores_extracted"
+              v-model.number="
+                form.substructure.concrete_core_extraction.number_of_foundation_cores_extracted
+              "
               class="field__input"
               type="number"
               min="1"
@@ -763,8 +854,17 @@ async function submitIntake(): Promise<void> {
             :items="uploads.substructure_coring_for_foundation_photos"
             :disabled="isSubmitting"
             :error="photoGroupError(photoGroupsByName.substructure_coring_for_foundation_photos)"
-            @select="(files) => onFilesSelected(photoGroupsByName.substructure_coring_for_foundation_photos, files)"
-            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.substructure_coring_for_foundation_photos, itemId)"
+            @select="
+              (files) =>
+                onFilesSelected(photoGroupsByName.substructure_coring_for_foundation_photos, files)
+            "
+            @remove="
+              (itemId) =>
+                onUploadItemRemoved(
+                  photoGroupsByName.substructure_coring_for_foundation_photos,
+                  itemId,
+                )
+            "
           />
         </div>
       </section>
@@ -779,26 +879,60 @@ async function submitIntake(): Promise<void> {
             :max="photoGroupsByName.substructure_rebar_scanning_for_foundation_photos.max"
             :items="uploads.substructure_rebar_scanning_for_foundation_photos"
             :disabled="isSubmitting"
-            :error="photoGroupError(photoGroupsByName.substructure_rebar_scanning_for_foundation_photos)"
-            @select="(files) => onFilesSelected(photoGroupsByName.substructure_rebar_scanning_for_foundation_photos, files)"
-            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.substructure_rebar_scanning_for_foundation_photos, itemId)"
+            :error="
+              photoGroupError(photoGroupsByName.substructure_rebar_scanning_for_foundation_photos)
+            "
+            @select="
+              (files) =>
+                onFilesSelected(
+                  photoGroupsByName.substructure_rebar_scanning_for_foundation_photos,
+                  files,
+                )
+            "
+            @remove="
+              (itemId) =>
+                onUploadItemRemoved(
+                  photoGroupsByName.substructure_rebar_scanning_for_foundation_photos,
+                  itemId,
+                )
+            "
           />
         </div>
       </section>
 
       <section class="form-panel">
-        <SectionHeader title="C.3 Substructure - Restoration for Coring Works, Backfilling, and Compaction Details" />
+        <SectionHeader
+          title="C.3 Substructure - Restoration for Coring Works, Backfilling, and Compaction Details"
+        />
         <div class="upload-grid upload-grid--single">
           <ImageUploadField
             :label="photoGroupsByName.substructure_restoration_backfilling_compaction_photos.label"
-            :section="photoGroupsByName.substructure_restoration_backfilling_compaction_photos.section"
+            :section="
+              photoGroupsByName.substructure_restoration_backfilling_compaction_photos.section
+            "
             :min="photoGroupsByName.substructure_restoration_backfilling_compaction_photos.min"
             :max="photoGroupsByName.substructure_restoration_backfilling_compaction_photos.max"
             :items="uploads.substructure_restoration_backfilling_compaction_photos"
             :disabled="isSubmitting"
-            :error="photoGroupError(photoGroupsByName.substructure_restoration_backfilling_compaction_photos)"
-            @select="(files) => onFilesSelected(photoGroupsByName.substructure_restoration_backfilling_compaction_photos, files)"
-            @remove="(itemId) => onUploadItemRemoved(photoGroupsByName.substructure_restoration_backfilling_compaction_photos, itemId)"
+            :error="
+              photoGroupError(
+                photoGroupsByName.substructure_restoration_backfilling_compaction_photos,
+              )
+            "
+            @select="
+              (files) =>
+                onFilesSelected(
+                  photoGroupsByName.substructure_restoration_backfilling_compaction_photos,
+                  files,
+                )
+            "
+            @remove="
+              (itemId) =>
+                onUploadItemRemoved(
+                  photoGroupsByName.substructure_restoration_backfilling_compaction_photos,
+                  itemId,
+                )
+            "
           />
         </div>
       </section>
@@ -818,7 +952,9 @@ async function submitIntake(): Promise<void> {
             :disabled="isSubmitting"
             :error="annexGroupError(annexGroupsByName[annexGroup.name])"
             @select="(files) => onAnnexFilesSelected(annexGroupsByName[annexGroup.name], files)"
-            @remove="(itemId) => onAnnexUploadItemRemoved(annexGroupsByName[annexGroup.name], itemId)"
+            @remove="
+              (itemId) => onAnnexUploadItemRemoved(annexGroupsByName[annexGroup.name], itemId)
+            "
           />
         </div>
       </section>
@@ -829,20 +965,24 @@ async function submitIntake(): Promise<void> {
           <label class="field">
             <span class="field__label">Prepared by</span>
             <input v-model="form.signature.prepared_by" class="field__input" maxlength="100" />
-            <span v-if="fieldErrors.prepared_by" class="field__error">{{ fieldErrors.prepared_by }}</span>
+            <span v-if="fieldErrors.prepared_by" class="field__error">{{
+              fieldErrors.prepared_by
+            }}</span>
           </label>
 
           <label class="field">
             <span class="field__label">Prepared by role</span>
             <input v-model="form.signature.prepared_by_role" class="field__input" maxlength="100" />
-            <span v-if="fieldErrors.prepared_by_role" class="field__error">{{ fieldErrors.prepared_by_role }}</span>
+            <span v-if="fieldErrors.prepared_by_role" class="field__error">{{
+              fieldErrors.prepared_by_role
+            }}</span>
           </label>
         </div>
       </section>
 
       <footer class="form-actions">
         <button class="btn btn--primary" type="submit" :disabled="!canSubmit">
-          {{ isSubmitting ? 'Saving draft and uploading files...' : 'Continue to Confirmation' }}
+          {{ isSubmitting ? "Saving draft and uploading files..." : "Continue to Confirmation" }}
         </button>
         <p class="form-summary">
           Continue unlocks only when all required fields and photo groups are valid.
