@@ -64,7 +64,7 @@ _ANNEX_SECTIONS: tuple[_AnnexSectionInfo, ...] = (
 
 
 class ActivityReportPdfRenderer(Protocol):
-    def render(self, session: ReportSession) -> bytes:
+    def render(self, session: ReportSession, *, allow_incomplete: bool = False) -> bytes:
         """Render a report session into PDF bytes."""
         ...
 
@@ -74,8 +74,8 @@ class RendererNotReadyError(RuntimeError):
 
 
 class UnconfiguredActivityReportPdfRenderer:
-    def render(self, session: ReportSession) -> bytes:
-        _ = session
+    def render(self, session: ReportSession, *, allow_incomplete: bool = False) -> bytes:
+        _ = session, allow_incomplete
         raise RendererNotReadyError(
             "Activity report renderer is not configured yet. "
             "Implement activity_report_pdf_renderer before calling generate."
@@ -86,11 +86,11 @@ class WeasyPrintActivityReportPdfRenderer:
     def __init__(self, *, sessions_root: Path = Path("data/sessions")) -> None:
         self._sessions_root = sessions_root
 
-    def render(self, session: ReportSession) -> bytes:
+    def render(self, session: ReportSession, *, allow_incomplete: bool = False) -> bytes:
         if session.form_fields is None:
             raise RendererNotReadyError("Report session has no form fields to render.")
 
-        html = self._build_html(session)
+        html = self._build_html(session, allow_incomplete=allow_incomplete)
         report_pdf_bytes = HTML(
             string=html, base_url=self._sessions_root.resolve().as_uri()
         ).write_pdf()
@@ -102,7 +102,7 @@ class WeasyPrintActivityReportPdfRenderer:
 
         return self._merge_report_with_annex_documents(session, report_pdf_bytes)
 
-    def _build_html(self, session: ReportSession) -> str:
+    def _build_html(self, session: ReportSession, *, allow_incomplete: bool = False) -> str:
         if session.form_fields is None:
             raise RendererNotReadyError("Report session has no form fields to render.")
 
@@ -233,6 +233,143 @@ class WeasyPrintActivityReportPdfRenderer:
             "foundation to its original profile."
         )
 
+        # Build subsection definitions for B (superstructure) and C (substructure).
+        # Each entry: (title_suffix, body_markup, photo_groups_used)
+        # photo_groups_used is used to decide whether to include the subsection
+        # when allow_incomplete is True.
+
+        b_subsection_defs: list[tuple[str, str, list[PhotoGroupName]]] = [
+            (
+                "Rebar Scanning",
+                self._paragraph(b1_paragraph)
+                + self._figure(
+                    "Figure {fig}. REBAR SCANNING",
+                    self._all_image_info(
+                        session, PhotoGroupName.SUPERSTRUCTURE_REBAR_SCANNING_PHOTOS
+                    ),
+                ),
+                [PhotoGroupName.SUPERSTRUCTURE_REBAR_SCANNING_PHOTOS],
+            ),
+            (
+                "Rebound Hammer Test",
+                self._paragraph(b2_paragraph)
+                + self._figure(
+                    "Figure {fig}. REBOUND HAMMER TESTS",
+                    self._all_image_info(
+                        session, PhotoGroupName.SUPERSTRUCTURE_REBOUND_HAMMER_TEST_PHOTOS
+                    ),
+                ),
+                [PhotoGroupName.SUPERSTRUCTURE_REBOUND_HAMMER_TEST_PHOTOS],
+            ),
+            (
+                "Concrete Core Extraction",
+                self._paragraph(b3_paragraph)
+                + self._figure(
+                    "Figure {fig}.1 Concrete Core Extraction",
+                    self._all_image_info(
+                        session, PhotoGroupName.SUPERSTRUCTURE_CONCRETE_CORING_PHOTOS
+                    ),
+                )
+                + self._figure(
+                    "Figure {fig}.2 Extracted Core Samples",
+                    self._all_image_info(
+                        session, PhotoGroupName.SUPERSTRUCTURE_CORE_SAMPLES_FAMILY_PIC
+                    ),
+                    contain_images=True,
+                ),
+                [
+                    PhotoGroupName.SUPERSTRUCTURE_CONCRETE_CORING_PHOTOS,
+                    PhotoGroupName.SUPERSTRUCTURE_CORE_SAMPLES_FAMILY_PIC,
+                ],
+            ),
+            (
+                "Rebar Extraction",
+                self._paragraph(b4_paragraph_intro)
+                + self._figure(
+                    "Figure {fig}.1 Rebar Extraction",
+                    self._all_image_info(
+                        session, PhotoGroupName.SUPERSTRUCTURE_REBAR_EXTRACTION_PHOTOS
+                    ),
+                )
+                + self._figure(
+                    "Figure {fig}.2 Extracted Rebar Samples",
+                    self._all_image_info(
+                        session, PhotoGroupName.SUPERSTRUCTURE_REBAR_SAMPLES_FAMILY_PIC
+                    ),
+                )
+                + self._paragraph(b4_paragraph_close),
+                [
+                    PhotoGroupName.SUPERSTRUCTURE_REBAR_EXTRACTION_PHOTOS,
+                    PhotoGroupName.SUPERSTRUCTURE_REBAR_SAMPLES_FAMILY_PIC,
+                ],
+            ),
+            (
+                "Chipping of Existing Slab",
+                self._paragraph(b5_paragraph)
+                + self._figure(
+                    "Figure {fig}. Chipping of Existing Slab",
+                    self._all_image_info(
+                        session, PhotoGroupName.SUPERSTRUCTURE_CHIPPING_OF_SLAB_PHOTOS
+                    ),
+                ),
+                [PhotoGroupName.SUPERSTRUCTURE_CHIPPING_OF_SLAB_PHOTOS],
+            ),
+            (
+                "Restoration Works",
+                self._paragraph(b6_paragraph)
+                + self._figure(
+                    "Figure {fig}. Restoration Works",
+                    self._all_image_info(session, PhotoGroupName.SUPERSTRUCTURE_RESTORATION_PHOTOS),
+                ),
+                [PhotoGroupName.SUPERSTRUCTURE_RESTORATION_PHOTOS],
+            ),
+        ]
+
+        c_subsection_defs: list[tuple[str, str, list[PhotoGroupName]]] = [
+            (
+                "Concrete Core Extraction",
+                self._paragraph(c1_paragraph)
+                + self._figure(
+                    "Figure {fig}. Concrete Core Extraction for Foundation",
+                    self._all_image_info(
+                        session, PhotoGroupName.SUBSTRUCTURE_CORING_FOR_FOUNDATION_PHOTOS
+                    ),
+                ),
+                [PhotoGroupName.SUBSTRUCTURE_CORING_FOR_FOUNDATION_PHOTOS],
+            ),
+            (
+                "Rebar Scanning",
+                self._paragraph(c2_paragraph)
+                + self._figure(
+                    "Figure {fig}. Rebar Scanning for Foundation",
+                    self._all_image_info(
+                        session,
+                        PhotoGroupName.SUBSTRUCTURE_REBAR_SCANNING_FOR_FOUNDATION_PHOTOS,
+                    ),
+                ),
+                [PhotoGroupName.SUBSTRUCTURE_REBAR_SCANNING_FOR_FOUNDATION_PHOTOS],
+            ),
+            (
+                "Restoration for Coring Works, Backfilling, and Compaction",
+                self._paragraph(c3_paragraph)
+                + self._figure(
+                    "Figure {fig}. Restoration for Coring Works, Backfilling, and Compaction",
+                    self._all_image_info(
+                        session,
+                        PhotoGroupName.SUBSTRUCTURE_RESTORATION_BACKFILLING_COMPACTION_PHOTOS,
+                    ),
+                ),
+                [PhotoGroupName.SUBSTRUCTURE_RESTORATION_BACKFILLING_COMPACTION_PHOTOS],
+            ),
+        ]
+
+        b_subsections = self._build_numbered_subsections(
+            "B", b_subsection_defs, session, allow_incomplete=allow_incomplete
+        )
+        c_subsections = self._build_numbered_subsections(
+            "C", c_subsection_defs, session, allow_incomplete=allow_incomplete
+        )
+
         header_logo_markup = (
             '<p class="report-header__logo-fallback">Company Logo</p>'
             if logo_uri is None
@@ -244,133 +381,33 @@ class WeasyPrintActivityReportPdfRenderer:
             else f'<img class="cover__logo" src="{logo_uri}" alt="Company logo" />'
         )
 
-        report_body = "".join(
-            [
-                self._chapter_section(
-                    "A. INTRODUCTION",
-                    "".join(
-                        [
-                            self._paragraph(introduction_opening_paragraph),
-                            self._figure(
-                                form.building_details.building_name,
-                                building_photos,
-                                contain_images=True,
-                                large=True,
-                            ),
-                            self._paragraph(introduction_closing_paragraph),
-                        ]
-                    ),
+        report_parts: list[str] = [
+            self._chapter_section(
+                "A. INTRODUCTION",
+                "".join(
+                    [
+                        self._paragraph(introduction_opening_paragraph),
+                        self._figure(
+                            form.building_details.building_name,
+                            building_photos,
+                            contain_images=True,
+                            large=True,
+                        ),
+                        self._paragraph(introduction_closing_paragraph),
+                    ]
                 ),
-                self._chapter_heading("B. DATA GATHERING FOR SUPERSTRUCTURE"),
-                self._subsection(
-                    "B.1. Rebar Scanning",
-                    self._paragraph(b1_paragraph)
-                    + self._figure(
-                        "Figure B.1. REBAR SCANNING",
-                        self._all_image_info(
-                            session, PhotoGroupName.SUPERSTRUCTURE_REBAR_SCANNING_PHOTOS
-                        ),
-                    ),
-                ),
-                self._subsection(
-                    "B.2. Rebound Hammer Test",
-                    self._paragraph(b2_paragraph)
-                    + self._figure(
-                        "Figure B.2. REBOUND HAMMER TESTS",
-                        self._all_image_info(
-                            session, PhotoGroupName.SUPERSTRUCTURE_REBOUND_HAMMER_TEST_PHOTOS
-                        ),
-                    ),
-                ),
-                self._subsection(
-                    "B.3. Concrete Core Extraction",
-                    self._paragraph(b3_paragraph)
-                    + self._figure(
-                        "Figure B.3.1 Concrete Core Extraction",
-                        self._all_image_info(
-                            session, PhotoGroupName.SUPERSTRUCTURE_CONCRETE_CORING_PHOTOS
-                        ),
-                    )
-                    + self._figure(
-                        "Figure B.3.2 Extracted Core Samples",
-                        self._all_image_info(
-                            session, PhotoGroupName.SUPERSTRUCTURE_CORE_SAMPLES_FAMILY_PIC
-                        ),
-                        contain_images=True,
-                    ),
-                ),
-                self._subsection(
-                    "B.4. Rebar Extraction",
-                    self._paragraph(b4_paragraph_intro)
-                    + self._figure(
-                        "Figure B.4.1 Rebar Extraction",
-                        self._all_image_info(
-                            session, PhotoGroupName.SUPERSTRUCTURE_REBAR_EXTRACTION_PHOTOS
-                        ),
-                    )
-                    + self._figure(
-                        "Figure B.4.2 Extracted Rebar Samples",
-                        self._all_image_info(
-                            session, PhotoGroupName.SUPERSTRUCTURE_REBAR_SAMPLES_FAMILY_PIC
-                        ),
-                    )
-                    + self._paragraph(b4_paragraph_close),
-                ),
-                self._subsection(
-                    "B.5. Chipping of Existing Slab",
-                    self._paragraph(b5_paragraph)
-                    + self._figure(
-                        "Figure B.5. Chipping of Existing Slab",
-                        self._all_image_info(
-                            session, PhotoGroupName.SUPERSTRUCTURE_CHIPPING_OF_SLAB_PHOTOS
-                        ),
-                    ),
-                ),
-                self._subsection(
-                    "B.6. Restoration Works",
-                    self._paragraph(b6_paragraph)
-                    + self._figure(
-                        "Figure B.6. Restoration Works",
-                        self._all_image_info(
-                            session, PhotoGroupName.SUPERSTRUCTURE_RESTORATION_PHOTOS
-                        ),
-                    ),
-                ),
-                self._chapter_heading("C. DATA GATHERING FOR SUBSTRUCTURE"),
-                self._subsection(
-                    "C.1. Concrete Core Extraction",
-                    self._paragraph(c1_paragraph)
-                    + self._figure(
-                        "Figure C.1. Concrete Core Extraction for Foundation",
-                        self._all_image_info(
-                            session, PhotoGroupName.SUBSTRUCTURE_CORING_FOR_FOUNDATION_PHOTOS
-                        ),
-                    ),
-                ),
-                self._subsection(
-                    "C.2. Rebar Scanning",
-                    self._paragraph(c2_paragraph)
-                    + self._figure(
-                        "Figure C.2. Rebar Scanning for Foundation",
-                        self._all_image_info(
-                            session,
-                            PhotoGroupName.SUBSTRUCTURE_REBAR_SCANNING_FOR_FOUNDATION_PHOTOS,
-                        ),
-                    ),
-                ),
-                self._subsection(
-                    "C.3. Restoration for Coring Works, Backfilling, and Compaction",
-                    self._paragraph(c3_paragraph)
-                    + self._figure(
-                        "Figure C.3. Restoration for Coring Works, Backfilling, and Compaction",
-                        self._all_image_info(
-                            session,
-                            PhotoGroupName.SUBSTRUCTURE_RESTORATION_BACKFILLING_COMPACTION_PHOTOS,
-                        ),
-                    ),
-                ),
-            ]
-        )
+            ),
+        ]
+
+        if b_subsections:
+            report_parts.append(self._chapter_heading("B. DATA GATHERING FOR SUPERSTRUCTURE"))
+            report_parts.extend(b_subsections)
+
+        if c_subsections:
+            report_parts.append(self._chapter_heading("C. DATA GATHERING FOR SUBSTRUCTURE"))
+            report_parts.extend(c_subsections)
+
+        report_body = "".join(report_parts)
 
         return f"""
 <!doctype html>
@@ -735,6 +772,38 @@ class WeasyPrintActivityReportPdfRenderer:
   {body_markup}
 </section>
 """
+
+    def _build_numbered_subsections(
+        self,
+        prefix: str,
+        defs: list[tuple[str, str, list[PhotoGroupName]]],
+        session: ReportSession,
+        *,
+        allow_incomplete: bool = False,
+    ) -> list[str]:
+        """Build subsection HTML blocks with dynamic numbering.
+
+        When *allow_incomplete* is True, subsections whose photo groups are all
+        empty are omitted entirely and the remaining subsections are
+        renumbered sequentially.
+        """
+        result: list[str] = []
+        counter = 0
+        for title_suffix, body_template, photo_groups in defs:
+            if allow_incomplete and not self._subsection_has_photos(session, photo_groups):
+                continue
+            counter += 1
+            label = f"{prefix}.{counter}"
+            heading = f"{label}. {title_suffix}"
+            body = body_template.replace("{fig}", label)
+            result.append(self._subsection(heading, body))
+        return result
+
+    def _subsection_has_photos(
+        self, session: ReportSession, photo_groups: list[PhotoGroupName]
+    ) -> bool:
+        """Return True if *any* of the given photo groups has at least one image."""
+        return any(bool(self._all_image_info(session, group)) for group in photo_groups)
 
     def _paragraph(self, markup: str) -> str:
         return f'<p class="section__paragraph">{markup}</p>'

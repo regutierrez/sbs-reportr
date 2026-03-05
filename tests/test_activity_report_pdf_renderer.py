@@ -185,3 +185,137 @@ def test_renderer_requires_form_fields(tmp_path: Path) -> None:
 
     with pytest.raises(RendererNotReadyError):
         renderer.render(session)
+
+
+def test_renderer_incomplete_skips_empty_subsections(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, str] = {}
+
+    class FakeHTML:
+        def __init__(self, *, string: str, base_url: str) -> None:
+            _ = base_url
+            captured["string"] = string
+
+        def write_pdf(self) -> bytes:
+            return b"%PDF-1.7\nfake"
+
+    import reportr.reporting.activity_report_pdf_renderer as renderer_module
+
+    monkeypatch.setattr(renderer_module, "HTML", FakeHTML)
+
+    session_id = uuid4()
+
+    # Only create images for rebar scanning (B) and rebar scanning for foundation (C)
+    rebar_scan_image_path = (
+        tmp_path
+        / str(session_id)
+        / "images"
+        / PhotoGroupName.SUPERSTRUCTURE_REBAR_SCANNING_PHOTOS.value
+        / "scan.jpg"
+    )
+    _create_test_image(rebar_scan_image_path)
+
+    sub_rebar_scan_image_path = (
+        tmp_path
+        / str(session_id)
+        / "images"
+        / PhotoGroupName.SUBSTRUCTURE_REBAR_SCANNING_FOR_FOUNDATION_PHOTOS.value
+        / "foundation.jpg"
+    )
+    _create_test_image(sub_rebar_scan_image_path)
+
+    session = ReportSession.model_validate(
+        {
+            "id": str(session_id),
+            "form_fields": _build_form_fields_payload(),
+            "images": {
+                PhotoGroupName.SUPERSTRUCTURE_REBAR_SCANNING_PHOTOS.value: [
+                    ImageMeta(
+                        id=uuid4(),
+                        group_name=PhotoGroupName.SUPERSTRUCTURE_REBAR_SCANNING_PHOTOS,
+                        original_filename="scan.jpg",
+                        stored_filename="scan.jpg",
+                        size_bytes=rebar_scan_image_path.stat().st_size,
+                        width=300,
+                        height=220,
+                    )
+                ],
+                PhotoGroupName.SUBSTRUCTURE_REBAR_SCANNING_FOR_FOUNDATION_PHOTOS.value: [
+                    ImageMeta(
+                        id=uuid4(),
+                        group_name=PhotoGroupName.SUBSTRUCTURE_REBAR_SCANNING_FOR_FOUNDATION_PHOTOS,
+                        original_filename="foundation.jpg",
+                        stored_filename="foundation.jpg",
+                        size_bytes=sub_rebar_scan_image_path.stat().st_size,
+                        width=300,
+                        height=220,
+                    )
+                ],
+            },
+        }
+    )
+
+    renderer = WeasyPrintActivityReportPdfRenderer(sessions_root=tmp_path)
+    renderer.render(session, allow_incomplete=True)
+
+    html = captured["string"]
+
+    # B: Only rebar scanning has photos → it becomes B.1
+    assert "B.1. Rebar Scanning" in html
+    assert "Figure B.1. REBAR SCANNING" in html
+
+    # Other B subsections should be absent entirely
+    assert "Rebound Hammer Test" not in html
+    assert "Concrete Core Extraction" not in html
+    assert "Rebar Extraction" not in html
+    assert "Chipping of Existing Slab" not in html
+    assert "Restoration Works" not in html
+
+    # B.2 through B.6 labels should not appear
+    assert "B.2." not in html
+
+    # C: Only rebar scanning for foundation has photos → it becomes C.1
+    assert "C.1. Rebar Scanning" in html
+    assert "Figure C.1. Rebar Scanning for Foundation" in html
+
+    # Other C subsections should be absent
+    assert "Backfilling" not in html
+    assert "C.2." not in html
+
+
+def test_renderer_incomplete_no_photos_omits_chapters(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, str] = {}
+
+    class FakeHTML:
+        def __init__(self, *, string: str, base_url: str) -> None:
+            _ = base_url
+            captured["string"] = string
+
+        def write_pdf(self) -> bytes:
+            return b"%PDF-1.7\nfake"
+
+    import reportr.reporting.activity_report_pdf_renderer as renderer_module
+
+    monkeypatch.setattr(renderer_module, "HTML", FakeHTML)
+
+    session = ReportSession.model_validate(
+        {
+            "id": str(uuid4()),
+            "form_fields": _build_form_fields_payload(),
+        }
+    )
+
+    renderer = WeasyPrintActivityReportPdfRenderer(sessions_root=tmp_path)
+    renderer.render(session, allow_incomplete=True)
+
+    html = captured["string"]
+
+    # Introduction should still appear
+    assert "A. INTRODUCTION" in html
+
+    # Chapters with no subsections should be entirely absent
+    assert "DATA GATHERING FOR SUPERSTRUCTURE" not in html
+    assert "DATA GATHERING FOR SUBSTRUCTURE" not in html
