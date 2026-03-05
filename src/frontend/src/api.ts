@@ -1,4 +1,6 @@
 import type {
+  AnnexGroupName,
+  AnnexUploadResult,
   GenerateReportResponse,
   ImageUploadResult,
   PhotoGroupName,
@@ -123,6 +125,20 @@ export function uploadReportImage(
   formData.append('image', imageFile)
 
   return requestJson<ImageUploadResult>(`/reports/${sessionId}/images/${groupName}`, {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export function uploadReportAnnexPdf(
+  sessionId: string,
+  groupName: AnnexGroupName,
+  pdfFile: File,
+): Promise<AnnexUploadResult> {
+  const formData = new FormData()
+  formData.append('document', pdfFile)
+
+  return requestJson<AnnexUploadResult>(`/reports/${sessionId}/annexes/${groupName}`, {
     method: 'POST',
     body: formData,
   })

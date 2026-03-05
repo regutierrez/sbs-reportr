@@ -2,20 +2,37 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { ApiError, createReportSession, saveReportFormFields, uploadReportImage } from '@/api'
+import {
+  ApiError,
+  createReportSession,
+  saveReportFormFields,
+  uploadReportAnnexPdf,
+  uploadReportImage,
+} from '@/api'
 import ImageUploadField from '@/components/ImageUploadField.vue'
+import PdfUploadField from '@/components/PdfUploadField.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import {
   useReportIntakeDraft,
+  type AnnexUploadItem,
   type UploadItem,
 } from '@/composables/use-report-intake-draft'
+import { ANNEX_GROUPS, type AnnexGroupConfig } from '@/constants/annex-groups'
 import { PHOTO_GROUPS, type PhotoGroupConfig } from '@/constants/photo-groups'
-import type { PhotoGroupName, ReportFormFields } from '@/types/report'
+import type { AnnexGroupName, PhotoGroupName, ReportFormFields } from '@/types/report'
 import { compressImageForUpload } from '@/utils/image-compression'
 
 const router = useRouter()
-const { confirmationReady, form, generatedDownloadUrl, selectionWarnings, sessionId, uploads } =
-  useReportIntakeDraft()
+const {
+  annexSelectionWarnings,
+  annexUploads,
+  confirmationReady,
+  form,
+  generatedDownloadUrl,
+  selectionWarnings,
+  sessionId,
+  uploads,
+} = useReportIntakeDraft()
 
 const isSubmitting = ref(false)
 const submitError = ref('')
@@ -96,6 +113,14 @@ const photoGroupsByName = PHOTO_GROUPS.reduce(
   {} as Record<PhotoGroupName, PhotoGroupConfig>,
 )
 
+const annexGroupsByName = ANNEX_GROUPS.reduce(
+  (accumulator, group) => {
+    accumulator[group.name] = group
+    return accumulator
+  },
+  {} as Record<AnnexGroupName, AnnexGroupConfig>,
+)
+
 function createItemId(): string {
   if (globalThis.crypto && 'randomUUID' in globalThis.crypto) {
     return globalThis.crypto.randomUUID()
@@ -119,6 +144,17 @@ function createUploadItem(file: File): UploadItem {
     status: 'pending',
     message: 'Queued',
     uploadedImage: null,
+  }
+}
+
+function createAnnexUploadItem(file: File): AnnexUploadItem {
+  return {
+    id: createItemId(),
+    name: file.name,
+    file,
+    status: 'pending',
+    message: 'Queued',
+    uploadedDocument: null,
   }
 }
 
@@ -207,6 +243,33 @@ function photoGroupError(group: PhotoGroupConfig): string {
   }
 
   return minRequirementError || selectionWarning
+}
+
+function onAnnexFilesSelected(group: AnnexGroupConfig, files: File[]): void {
+  const [firstFile] = files
+
+  if (!firstFile) {
+    annexSelectionWarnings[group.name] = ''
+    return
+  }
+
+  const isPdfFile = firstFile.type === 'application/pdf' || firstFile.name.toLowerCase().endsWith('.pdf')
+  if (!isPdfFile) {
+    annexSelectionWarnings[group.name] = 'Only PDF files are allowed for ANNEX uploads.'
+    return
+  }
+
+  annexUploads[group.name] = [createAnnexUploadItem(firstFile)]
+  annexSelectionWarnings[group.name] = files.length > 1 ? 'Only 1 PDF is allowed for this subsection.' : ''
+}
+
+function onAnnexUploadItemRemoved(group: AnnexGroupConfig, itemId: string): void {
+  annexUploads[group.name] = annexUploads[group.name].filter((item) => item.id !== itemId)
+  annexSelectionWarnings[group.name] = ''
+}
+
+function annexGroupError(group: AnnexGroupConfig): string {
+  return annexSelectionWarnings[group.name]
 }
 
 function normalizeErrorMessage(error: unknown): string {
@@ -306,6 +369,32 @@ async function uploadGroupItem(
   }
 }
 
+async function uploadAnnexGroupItem(
+  currentSessionId: string,
+  groupName: AnnexGroupName,
+  item: AnnexUploadItem,
+): Promise<void> {
+  if (item.uploadedDocument) {
+    item.status = 'uploaded'
+    item.message = 'Uploaded'
+    return
+  }
+
+  try {
+    item.status = 'uploading'
+    item.message = 'Uploading...'
+    const uploadResult = await uploadReportAnnexPdf(currentSessionId, groupName, item.file)
+
+    item.uploadedDocument = uploadResult.document
+    item.status = 'uploaded'
+    item.message = 'Uploaded'
+  } catch (error) {
+    item.status = 'error'
+    item.message = normalizeErrorMessage(error)
+    throw error
+  }
+}
+
 async function submitIntake(): Promise<void> {
   if (!canSubmit.value) {
     return
@@ -335,6 +424,11 @@ async function submitIntake(): Promise<void> {
         uploadJobs.push(uploadGroupItem(sessionId.value, group.name, item))
       }
     }
+    for (const group of ANNEX_GROUPS) {
+      for (const item of annexUploads[group.name]) {
+        uploadJobs.push(uploadAnnexGroupItem(sessionId.value, group.name, item))
+      }
+    }
 
     const uploadResults = await Promise.allSettled(uploadJobs)
     const failedUploads = uploadResults.filter(
@@ -343,12 +437,12 @@ async function submitIntake(): Promise<void> {
 
     if (failedUploads.length > 0) {
       throw new Error(
-        `${failedUploads.length} photo upload${failedUploads.length === 1 ? '' : 's'} failed. ` +
+        `${failedUploads.length} upload${failedUploads.length === 1 ? '' : 's'} failed. ` +
           'Fix the items marked in red and retry.',
       )
     }
 
-    submitSuccess.value = `Draft saved and photos uploaded. Session ${sessionId.value}.`
+    submitSuccess.value = `Draft saved and files uploaded. Session ${sessionId.value}.`
     confirmationReady.value = true
     void router.push({ name: 'confirmation' })
   } catch (error) {
@@ -710,6 +804,26 @@ async function submitIntake(): Promise<void> {
       </section>
 
       <section class="form-panel">
+        <SectionHeader
+          title="ANNEX"
+          subtitle="Optional PDF uploads. Leave any subsection blank to skip ANNEX generation for that subsection."
+        />
+        <div class="upload-grid upload-grid--annex">
+          <PdfUploadField
+            v-for="annexGroup in ANNEX_GROUPS"
+            :key="annexGroup.name"
+            :label="annexGroupsByName[annexGroup.name].label"
+            :section="annexGroupsByName[annexGroup.name].section"
+            :items="annexUploads[annexGroup.name]"
+            :disabled="isSubmitting"
+            :error="annexGroupError(annexGroupsByName[annexGroup.name])"
+            @select="(files) => onAnnexFilesSelected(annexGroupsByName[annexGroup.name], files)"
+            @remove="(itemId) => onAnnexUploadItemRemoved(annexGroupsByName[annexGroup.name], itemId)"
+          />
+        </div>
+      </section>
+
+      <section class="form-panel">
         <SectionHeader title="Signature - Prepared by" />
         <div class="field-grid field-grid--signature">
           <label class="field">
@@ -728,7 +842,7 @@ async function submitIntake(): Promise<void> {
 
       <footer class="form-actions">
         <button class="btn btn--primary" type="submit" :disabled="!canSubmit">
-          {{ isSubmitting ? 'Saving draft and uploading photos...' : 'Continue to Confirmation' }}
+          {{ isSubmitting ? 'Saving draft and uploading files...' : 'Continue to Confirmation' }}
         </button>
         <p class="form-summary">
           Continue unlocks only when all required fields and photo groups are valid.
@@ -851,6 +965,10 @@ async function submitIntake(): Promise<void> {
 }
 
 .upload-grid--pair {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.upload-grid--annex {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 

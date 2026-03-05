@@ -1,9 +1,17 @@
 import { reactive, ref } from 'vue'
 
+import { ANNEX_GROUPS } from '@/constants/annex-groups'
 import { PHOTO_GROUPS } from '@/constants/photo-groups'
-import type { ImageMeta, PhotoGroupName, ReportFormFields } from '@/types/report'
+import type {
+  AnnexDocumentMeta,
+  AnnexGroupName,
+  ImageMeta,
+  PhotoGroupName,
+  ReportFormFields,
+} from '@/types/report'
 
 export type UploadState = 'pending' | 'compressing' | 'uploading' | 'uploaded' | 'error'
+export type AnnexUploadState = 'pending' | 'uploading' | 'uploaded' | 'error'
 
 export interface UploadItem {
   id: string
@@ -13,6 +21,15 @@ export interface UploadItem {
   status: UploadState
   message: string
   uploadedImage: ImageMeta | null
+}
+
+export interface AnnexUploadItem {
+  id: string
+  name: string
+  file: File
+  status: AnnexUploadState
+  message: string
+  uploadedDocument: AnnexDocumentMeta | null
 }
 
 function createInitialForm(): ReportFormFields {
@@ -74,15 +91,39 @@ function createSelectionWarningsMap(): Record<PhotoGroupName, string> {
   )
 }
 
+function createAnnexUploadItemsMap(): Record<AnnexGroupName, AnnexUploadItem[]> {
+  return ANNEX_GROUPS.reduce(
+    (accumulator, group) => {
+      accumulator[group.name] = []
+      return accumulator
+    },
+    {} as Record<AnnexGroupName, AnnexUploadItem[]>,
+  )
+}
+
+function createAnnexSelectionWarningsMap(): Record<AnnexGroupName, string> {
+  return ANNEX_GROUPS.reduce(
+    (accumulator, group) => {
+      accumulator[group.name] = ''
+      return accumulator
+    },
+    {} as Record<AnnexGroupName, string>,
+  )
+}
+
 const form = reactive<ReportFormFields>(createInitialForm())
 const sessionId = ref<string | null>(null)
 const uploads = reactive(createUploadItemsMap())
 const selectionWarnings = reactive(createSelectionWarningsMap())
+const annexUploads = reactive(createAnnexUploadItemsMap())
+const annexSelectionWarnings = reactive(createAnnexSelectionWarningsMap())
 const confirmationReady = ref(false)
 const generatedDownloadUrl = ref<string | null>(null)
 
 export function useReportIntakeDraft() {
   return {
+    annexSelectionWarnings,
+    annexUploads,
     confirmationReady,
     form,
     generatedDownloadUrl,

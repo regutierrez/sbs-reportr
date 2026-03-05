@@ -30,6 +30,20 @@ class PhotoGroupName(StrEnum):
     )
 
 
+class AnnexGroupName(StrEnum):
+    REBAR_SCANNING_OUTPUT = "rebar_scanning_output"
+    REBOUND_NUMBER_TEST_RESULTS = "rebound_number_test_results"
+    COMPRESSIVE_STRENGTH_TEST_RESULTS_SUPERSTRUCTURE = (
+        "compressive_strength_test_results_superstructure"
+    )
+    TENSILE_STRENGTH_TEST_RESULTS = "tensile_strength_test_results"
+    COMPRESSIVE_STRENGTH_TEST_RESULTS_SUBSTRUCTURE = (
+        "compressive_strength_test_results_substructure"
+    )
+    REBAR_SCANNING_RESULTS_FOR_FOUNDATION = "rebar_scanning_results_for_foundation"
+    MATERIAL_TESTS_MAPPING = "material_tests_mapping"
+
+
 PHOTO_GROUP_LIMITS: dict[PhotoGroupName, tuple[int, int]] = {
     PhotoGroupName.BUILDING_DETAILS_BUILDING_PHOTO: (1, 1),
     PhotoGroupName.SUPERSTRUCTURE_REBAR_SCANNING_PHOTOS: (1, 5),
@@ -43,6 +57,16 @@ PHOTO_GROUP_LIMITS: dict[PhotoGroupName, tuple[int, int]] = {
     PhotoGroupName.SUBSTRUCTURE_CORING_FOR_FOUNDATION_PHOTOS: (1, 5),
     PhotoGroupName.SUBSTRUCTURE_REBAR_SCANNING_FOR_FOUNDATION_PHOTOS: (1, 5),
     PhotoGroupName.SUBSTRUCTURE_RESTORATION_BACKFILLING_COMPACTION_PHOTOS: (1, 5),
+}
+
+ANNEX_GROUP_LIMITS: dict[AnnexGroupName, tuple[int, int]] = {
+    AnnexGroupName.REBAR_SCANNING_OUTPUT: (0, 1),
+    AnnexGroupName.REBOUND_NUMBER_TEST_RESULTS: (0, 1),
+    AnnexGroupName.COMPRESSIVE_STRENGTH_TEST_RESULTS_SUPERSTRUCTURE: (0, 1),
+    AnnexGroupName.TENSILE_STRENGTH_TEST_RESULTS: (0, 1),
+    AnnexGroupName.COMPRESSIVE_STRENGTH_TEST_RESULTS_SUBSTRUCTURE: (0, 1),
+    AnnexGroupName.REBAR_SCANNING_RESULTS_FOR_FOUNDATION: (0, 1),
+    AnnexGroupName.MATERIAL_TESTS_MAPPING: (0, 1),
 }
 
 
@@ -113,10 +137,19 @@ class ImageMeta(BaseModel):
     height: int = Field(gt=0)
 
 
+class AnnexDocumentMeta(BaseModel):
+    id: UUID
+    group_name: AnnexGroupName
+    original_filename: str
+    stored_filename: str
+    size_bytes: int = Field(ge=0)
+
+
 class ReportSession(BaseModel):
     id: UUID
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     status: ReportStatus = ReportStatus.DRAFT
     form_fields: ReportFormFields | None = None
     images: dict[str, list[ImageMeta]] = Field(default_factory=dict)
+    annex_documents: dict[str, AnnexDocumentMeta] = Field(default_factory=dict)
     generated_pdf_path: str | None = None

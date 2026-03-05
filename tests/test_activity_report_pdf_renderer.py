@@ -1,11 +1,20 @@
 from pathlib import Path
 from uuid import uuid4
 
+from io import BytesIO
+
 import pytest
 from PIL import Image
+from pypdf import PdfReader, PdfWriter
 
 from reportr.reporting import RendererNotReadyError, WeasyPrintActivityReportPdfRenderer
-from reportr.storage import ImageMeta, PhotoGroupName, ReportSession
+from reportr.storage import (
+    AnnexDocumentMeta,
+    AnnexGroupName,
+    ImageMeta,
+    PhotoGroupName,
+    ReportSession,
+)
 
 
 def _build_form_fields_payload() -> dict[str, object]:
@@ -43,6 +52,16 @@ def _create_test_image(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     image = Image.new("RGB", (300, 220), color=(10, 80, 200))
     image.save(path, format="JPEG")
+
+
+def _build_pdf_bytes(*, page_count: int) -> bytes:
+    writer = PdfWriter()
+    for _ in range(page_count):
+        writer.add_blank_page(width=595, height=842)
+
+    output = BytesIO()
+    writer.write(output)
+    return output.getvalue()
 
 
 def test_renderer_uses_file_uris_and_dynamic_content(
@@ -103,6 +122,61 @@ def test_renderer_uses_file_uris_and_dynamic_content(
     assert "FEBRUARY 2026" in captured["string"]
     assert image_path.resolve().as_uri() in captured["string"]
     assert captured["base_url"] == tmp_path.resolve().as_uri()
+
+
+def test_renderer_appends_annex_cover_and_uploaded_pdf(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured_strings: list[str] = []
+
+    class FakeHTML:
+        def __init__(self, *, string: str, base_url: str) -> None:
+            _ = base_url
+            captured_strings.append(string)
+
+        def write_pdf(self) -> bytes:
+            return _build_pdf_bytes(page_count=1)
+
+    import reportr.reporting.activity_report_pdf_renderer as renderer_module
+
+    monkeypatch.setattr(renderer_module, "HTML", FakeHTML)
+
+    session_id = uuid4()
+    annex_path = (
+        tmp_path
+        / str(session_id)
+        / "annexes"
+        / AnnexGroupName.REBAR_SCANNING_OUTPUT.value
+        / "annex-i.pdf"
+    )
+    annex_path.parent.mkdir(parents=True, exist_ok=True)
+    annex_path.write_bytes(_build_pdf_bytes(page_count=2))
+
+    session = ReportSession.model_validate(
+        {
+            "id": str(session_id),
+            "form_fields": _build_form_fields_payload(),
+            "annex_documents": {
+                AnnexGroupName.REBAR_SCANNING_OUTPUT.value: AnnexDocumentMeta(
+                    id=uuid4(),
+                    group_name=AnnexGroupName.REBAR_SCANNING_OUTPUT,
+                    original_filename="annex-i.pdf",
+                    stored_filename="annex-i.pdf",
+                    size_bytes=annex_path.stat().st_size,
+                )
+            },
+        }
+    )
+
+    renderer = WeasyPrintActivityReportPdfRenderer(sessions_root=tmp_path)
+    output = renderer.render(session)
+
+    merged_reader = PdfReader(BytesIO(output))
+    assert len(merged_reader.pages) == 4
+
+    annex_cover_markup = next(html for html in captured_strings if "ANNEX I" in html)
+    assert "Activity Report" not in annex_cover_markup
+    assert "Page <span" not in annex_cover_markup
 
 
 def test_renderer_requires_form_fields(tmp_path: Path) -> None:

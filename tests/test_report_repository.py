@@ -7,6 +7,7 @@ import pytest
 
 from reportr.storage import (
     FileSystemReportRepository,
+    AnnexGroupName,
     PhotoGroupName,
     ReportFormFields,
     ReportSession,
@@ -83,6 +84,7 @@ def test_create_session_persists_metadata(tmp_path: Path) -> None:
     assert loaded.status == ReportStatus.DRAFT
     assert loaded.form_fields is None
     assert loaded.images == {}
+    assert loaded.annex_documents == {}
 
 
 def test_save_form_fields_updates_existing_session(tmp_path: Path) -> None:
@@ -127,6 +129,35 @@ def test_save_image_writes_file_and_records_metadata(tmp_path: Path) -> None:
         / image.stored_filename
     )
     assert stored_path.read_bytes() == b"compressed image bytes"
+
+
+def test_save_annex_document_writes_file_and_records_metadata(tmp_path: Path) -> None:
+    repository = make_repository(tmp_path)
+    session = repository.create_session()
+
+    annex_document = repository.save_annex_document(
+        session.id,
+        group_name=AnnexGroupName.REBAR_SCANNING_OUTPUT,
+        source=BytesIO(b"%PDF-1.7\nannex"),
+        original_filename="annex-output.pdf",
+        size_bytes=15,
+    )
+    loaded = repository.get_session(session.id)
+
+    assert annex_document.group_name == AnnexGroupName.REBAR_SCANNING_OUTPUT
+    assert annex_document.stored_filename.endswith(".pdf")
+    assert loaded is not None
+    assert loaded.annex_documents[AnnexGroupName.REBAR_SCANNING_OUTPUT.value] == annex_document
+
+    stored_path = (
+        tmp_path
+        / "sessions"
+        / str(session.id)
+        / "annexes"
+        / AnnexGroupName.REBAR_SCANNING_OUTPUT.value
+        / annex_document.stored_filename
+    )
+    assert stored_path.read_bytes() == b"%PDF-1.7\nannex"
 
 
 def test_persist_generated_pdf_writes_output_and_updates_status(tmp_path: Path) -> None:
@@ -195,6 +226,24 @@ def test_cleanup_session_images_removes_session_image_directory(tmp_path: Path) 
     assert not images_root.exists()
 
 
+def test_cleanup_session_annex_documents_removes_annex_directory(tmp_path: Path) -> None:
+    repository = make_repository(tmp_path)
+    session = repository.create_session()
+
+    repository.save_annex_document(
+        session.id,
+        group_name=AnnexGroupName.REBAR_SCANNING_OUTPUT,
+        source=BytesIO(b"%PDF-1.7\nannex"),
+        original_filename="annex-output.pdf",
+        size_bytes=15,
+    )
+
+    repository.cleanup_session_annex_documents(session.id)
+
+    annex_root = tmp_path / "sessions" / str(session.id) / "annexes"
+    assert not annex_root.exists()
+
+
 def test_cleanup_expired_sessions_removes_abandoned_drafts_only(tmp_path: Path) -> None:
     repository = make_repository(tmp_path)
     old_cutoff = datetime.now(timezone.utc) - timedelta(days=2)
@@ -236,11 +285,20 @@ def test_missing_session_raises_for_mutations(tmp_path: Path) -> None:
             width=1,
             height=1,
         )
+    with pytest.raises(SessionNotFoundError) as save_annex_error:
+        repository.save_annex_document(
+            missing_session_id,
+            group_name=AnnexGroupName.REBAR_SCANNING_OUTPUT,
+            source=BytesIO(b"%PDF-1.7"),
+            original_filename="annex.pdf",
+            size_bytes=8,
+        )
     with pytest.raises(SessionNotFoundError) as persist_pdf_error:
         repository.persist_generated_pdf(missing_session_id, b"pdf")
 
     assert save_fields_error.value.session_id == missing_session_id
     assert save_image_error.value.session_id == missing_session_id
+    assert save_annex_error.value.session_id == missing_session_id
     assert persist_pdf_error.value.session_id == missing_session_id
 
 

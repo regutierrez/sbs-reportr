@@ -13,6 +13,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
+from pypdf import PdfReader
 
 from reportr.reporting.activity_report_pdf_renderer import (
     ActivityReportPdfRenderer,
@@ -21,7 +22,10 @@ from reportr.reporting.activity_report_pdf_renderer import (
     WeasyPrintActivityReportPdfRenderer,
 )
 from reportr.storage.models import (
+    ANNEX_GROUP_LIMITS,
     PHOTO_GROUP_LIMITS,
+    AnnexDocumentMeta,
+    AnnexGroupName,
     ImageMeta,
     PhotoGroupName,
     ReportFormFields,
@@ -41,6 +45,7 @@ RENDER_CONCURRENCY_LIMIT = 3
 ABANDONED_SESSION_TTL_SECONDS = 24 * 60 * 60
 SESSION_CLEANUP_INTERVAL_SECONDS = 30 * 60
 ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+ALLOWED_ANNEX_MIME_TYPES = {"application/pdf"}
 
 DATA_ROOT_ENV = "REPORTR_DATA_ROOT"
 SESSIONS_ROOT_ENV = "REPORTR_SESSIONS_ROOT"
@@ -54,6 +59,10 @@ class SessionStatusResponse(BaseModel):
 
 class ImageUploadResponse(BaseModel):
     image: ImageMeta
+
+
+class AnnexUploadResponse(BaseModel):
+    document: AnnexDocumentMeta
 
 
 class GenerateReportResponse(BaseModel):
@@ -156,7 +165,7 @@ def create_app(
                 image_meta.size_bytes
                 for image_set in session.images.values()
                 for image_meta in image_set
-            )
+            ) + sum(document.size_bytes for document in session.annex_documents.values())
             if existing_total_size + size_bytes > MAX_SESSION_SIZE_BYTES:
                 raise HTTPException(
                     status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -183,6 +192,68 @@ def create_app(
             return ImageUploadResponse(image=saved_image)
         finally:
             await image.close()
+
+    @app.post(
+        "/reports/{session_id}/annexes/{group_name}",
+        response_model=AnnexUploadResponse,
+        status_code=status.HTTP_201_CREATED,
+        tags=["reports"],
+    )
+    async def upload_annex_document(
+        session_id: UUID,
+        group_name: AnnexGroupName,
+        document: UploadFile = File(...),
+    ) -> AnnexUploadResponse:
+        try:
+            _validate_annex_mime_type(document)
+
+            repository: ReportRepository = app.state.report_repository
+            session = _require_session(repository, session_id)
+
+            size_bytes = _get_upload_size(document.file)
+            if size_bytes > MAX_FILE_SIZE_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="PDF exceeds the 15MB file size limit.",
+                )
+
+            _validate_annex_pdf(document.file)
+
+            max_documents = ANNEX_GROUP_LIMITS[group_name][1]
+            if max_documents <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Annex group '{group_name.value}' does not accept uploads.",
+                )
+
+            existing_document = session.annex_documents.get(group_name.value)
+            existing_total_size = sum(
+                image_meta.size_bytes
+                for image_set in session.images.values()
+                for image_meta in image_set
+            ) + sum(
+                saved_document.size_bytes for saved_document in session.annex_documents.values()
+            )
+            if existing_document is not None:
+                existing_total_size -= existing_document.size_bytes
+
+            if existing_total_size + size_bytes > MAX_SESSION_SIZE_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="Session exceeds the 300MB total upload limit.",
+                )
+
+            saved_document = repository.save_annex_document(
+                session_id,
+                group_name=group_name,
+                source=document.file,
+                original_filename=document.filename or "upload.pdf",
+                size_bytes=size_bytes,
+            )
+
+            return AnnexUploadResponse(document=saved_document)
+        finally:
+            await document.close()
 
     @app.post(
         "/reports/{session_id}/generate", response_model=GenerateReportResponse, tags=["reports"]
@@ -251,6 +322,7 @@ def create_app(
 
             repository.persist_generated_pdf(session_id, pdf_bytes)
             repository.cleanup_session_images(session_id)
+            repository.cleanup_session_annex_documents(session_id)
 
         return GenerateReportResponse(
             session_id=session_id,
@@ -291,6 +363,44 @@ def _validate_image_mime_type(image: UploadFile) -> None:
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail=f"Unsupported image type '{image.content_type}'. Allowed types: {allowed_types}.",
         )
+
+
+def _validate_annex_mime_type(document: UploadFile) -> None:
+    content_type = document.content_type
+    filename = (document.filename or "").lower()
+
+    if content_type in ALLOWED_ANNEX_MIME_TYPES:
+        return
+
+    if filename.endswith(".pdf"):
+        return
+
+    allowed_types = ", ".join(sorted(ALLOWED_ANNEX_MIME_TYPES))
+    raise HTTPException(
+        status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+        detail=f"Unsupported annex type '{content_type}'. Allowed types: {allowed_types}.",
+    )
+
+
+def _validate_annex_pdf(source: BinaryIO) -> None:
+    source.seek(0)
+
+    try:
+        reader = PdfReader(source)
+        if len(reader.pages) < 1:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Uploaded file is not a valid PDF.",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Uploaded file is not a valid PDF.",
+        ) from exc
+    finally:
+        source.seek(0)
 
 
 def _get_upload_size(source: BinaryIO) -> int:

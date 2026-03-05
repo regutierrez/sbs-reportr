@@ -71,6 +71,15 @@ export type PhotoGroupName =
   | 'substructure_rebar_scanning_for_foundation_photos'
   | 'substructure_restoration_backfilling_compaction_photos'
 
+export type AnnexGroupName =
+  | 'rebar_scanning_output'
+  | 'rebound_number_test_results'
+  | 'compressive_strength_test_results_superstructure'
+  | 'tensile_strength_test_results'
+  | 'compressive_strength_test_results_substructure'
+  | 'rebar_scanning_results_for_foundation'
+  | 'material_tests_mapping'
+
 export interface ImageMeta {
   id: string
   group_name: PhotoGroupName
@@ -81,12 +90,21 @@ export interface ImageMeta {
   height: number
 }
 
+export interface AnnexDocumentMeta {
+  id: string
+  group_name: AnnexGroupName
+  original_filename: string
+  stored_filename: string
+  size_bytes: number
+}
+
 export interface ReportSession {
   id: string
   created_at: string
   status: ReportStatus
   form_fields: ReportFormFields | null
   images: Record<string, ImageMeta[]>
+  annex_documents: Partial<Record<AnnexGroupName, AnnexDocumentMeta>>
   generated_pdf_path: string | null
 }
 
@@ -97,6 +115,10 @@ export interface SessionStatusResponse {
 
 export interface ImageUploadResult {
   image: ImageMeta
+}
+
+export interface AnnexUploadResult {
+  document: AnnexDocumentMeta
 }
 
 export interface GenerateReportResponse {

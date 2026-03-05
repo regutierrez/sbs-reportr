@@ -6,7 +6,15 @@ from shutil import copyfileobj, rmtree
 from typing import BinaryIO
 from uuid import UUID, uuid4
 
-from .models import PhotoGroupName, ImageMeta, ReportFormFields, ReportSession, ReportStatus
+from .models import (
+    AnnexDocumentMeta,
+    AnnexGroupName,
+    ImageMeta,
+    PhotoGroupName,
+    ReportFormFields,
+    ReportSession,
+    ReportStatus,
+)
 
 
 class SessionNotFoundError(LookupError):
@@ -43,6 +51,18 @@ class ReportRepository(ABC):
         """Persist an uploaded image and register image metadata on a session."""
 
     @abstractmethod
+    def save_annex_document(
+        self,
+        session_id: UUID,
+        *,
+        group_name: AnnexGroupName,
+        source: BinaryIO,
+        original_filename: str,
+        size_bytes: int,
+    ) -> AnnexDocumentMeta:
+        """Persist an uploaded annex PDF and register metadata on a session."""
+
+    @abstractmethod
     def persist_generated_pdf(self, session_id: UUID, pdf_bytes: bytes) -> Path:
         """Persist generated report output to long-term storage."""
 
@@ -57,6 +77,10 @@ class ReportRepository(ABC):
     @abstractmethod
     def cleanup_session_images(self, session_id: UUID) -> None:
         """Remove session image files after successful generation."""
+
+    @abstractmethod
+    def cleanup_session_annex_documents(self, session_id: UUID) -> None:
+        """Remove session annex PDF files after successful generation."""
 
     @abstractmethod
     def cleanup_expired_sessions(self, max_age: timedelta) -> int:
@@ -88,6 +112,7 @@ class FileSystemReportRepository(ReportRepository):
         session = ReportSession(id=uuid4())
         self._session_directory(session.id).mkdir(parents=True, exist_ok=False)
         self._images_directory(session.id).mkdir(parents=True, exist_ok=True)
+        self._annexes_directory(session.id).mkdir(parents=True, exist_ok=True)
         self._write_session(session)
         return session
 
@@ -141,6 +166,46 @@ class FileSystemReportRepository(ReportRepository):
 
         return image
 
+    def save_annex_document(
+        self,
+        session_id: UUID,
+        *,
+        group_name: AnnexGroupName,
+        source: BinaryIO,
+        original_filename: str,
+        size_bytes: int,
+    ) -> AnnexDocumentMeta:
+        session = self._require_session(session_id)
+
+        annex_id = uuid4()
+        extension = Path(original_filename).suffix.lower()
+        if extension != ".pdf":
+            extension = ".pdf"
+
+        stored_filename = f"{annex_id}{extension}"
+        annex_directory = self._annexes_directory(session_id) / group_name.value
+        annex_directory.mkdir(parents=True, exist_ok=True)
+
+        for existing_file in annex_directory.iterdir():
+            if existing_file.is_file():
+                existing_file.unlink()
+
+        annex_path = annex_directory / stored_filename
+        with annex_path.open("wb") as destination:
+            copyfileobj(source, destination)
+
+        annex_document = AnnexDocumentMeta(
+            id=annex_id,
+            group_name=group_name,
+            original_filename=original_filename,
+            stored_filename=stored_filename,
+            size_bytes=size_bytes,
+        )
+        session.annex_documents[group_name.value] = annex_document
+        self._write_session(session)
+
+        return annex_document
+
     def persist_generated_pdf(self, session_id: UUID, pdf_bytes: bytes) -> Path:
         session = self._require_session(session_id)
 
@@ -178,6 +243,13 @@ class FileSystemReportRepository(ReportRepository):
         image_root = self._images_directory(session_id)
         if image_root.exists():
             rmtree(image_root)
+
+    def cleanup_session_annex_documents(self, session_id: UUID) -> None:
+        self._require_session(session_id)
+
+        annex_root = self._annexes_directory(session_id)
+        if annex_root.exists():
+            rmtree(annex_root)
 
     def cleanup_expired_sessions(self, max_age: timedelta) -> int:
         now = datetime.now(timezone.utc)
@@ -230,6 +302,9 @@ class FileSystemReportRepository(ReportRepository):
 
     def _images_directory(self, session_id: UUID) -> Path:
         return self._session_directory(session_id) / "images"
+
+    def _annexes_directory(self, session_id: UUID) -> Path:
+        return self._session_directory(session_id) / "annexes"
 
     def _metadata_path(self, session_id: UUID) -> Path:
         return self._session_directory(session_id) / "session.json"

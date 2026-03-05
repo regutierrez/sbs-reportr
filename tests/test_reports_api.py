@@ -4,9 +4,16 @@ from uuid import UUID
 
 from fastapi.testclient import TestClient
 from PIL import Image
+from pypdf import PdfWriter
 
 from reportr.app.web_api import create_app
-from reportr.storage import FileSystemReportRepository, PhotoGroupName, ReportSession, ReportStatus
+from reportr.storage import (
+    AnnexGroupName,
+    FileSystemReportRepository,
+    PhotoGroupName,
+    ReportSession,
+    ReportStatus,
+)
 
 
 class StubRenderer:
@@ -63,6 +70,16 @@ def build_png_bytes(*, width: int = 320, height: int = 240) -> bytes:
     image = Image.new("RGB", (width, height), color=(0, 81, 255))
     output = BytesIO()
     image.save(output, format="PNG")
+    return output.getvalue()
+
+
+def build_pdf_bytes(*, page_count: int = 1) -> bytes:
+    writer = PdfWriter()
+    for _ in range(page_count):
+        writer.add_blank_page(width=595, height=842)
+
+    output = BytesIO()
+    writer.write(output)
     return output.getvalue()
 
 
@@ -207,6 +224,36 @@ def test_upload_image_accepts_five_images_for_core_samples_group(tmp_path: Path)
     assert "max of 5" in overflow_response.json()["detail"]
 
 
+def test_upload_annex_document_saves_metadata(tmp_path: Path) -> None:
+    client, _ = make_client(tmp_path)
+    create_response = client.post("/reports")
+    session_id = create_response.json()["session_id"]
+
+    response = client.post(
+        f"/reports/{session_id}/annexes/{AnnexGroupName.REBAR_SCANNING_OUTPUT.value}",
+        files={"document": ("annex-i.pdf", build_pdf_bytes(page_count=2), "application/pdf")},
+    )
+
+    assert response.status_code == 201
+    response_payload = response.json()["document"]
+    assert response_payload["group_name"] == AnnexGroupName.REBAR_SCANNING_OUTPUT.value
+    assert response_payload["original_filename"] == "annex-i.pdf"
+
+
+def test_upload_annex_document_rejects_invalid_pdf(tmp_path: Path) -> None:
+    client, _ = make_client(tmp_path)
+    create_response = client.post("/reports")
+    session_id = create_response.json()["session_id"]
+
+    response = client.post(
+        f"/reports/{session_id}/annexes/{AnnexGroupName.REBAR_SCANNING_OUTPUT.value}",
+        files={"document": ("annex-i.pdf", b"not a real pdf", "application/pdf")},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Uploaded file is not a valid PDF."
+
+
 def test_generate_report_rejects_incomplete_session(tmp_path: Path) -> None:
     client, _ = make_client(tmp_path)
     create_response = client.post("/reports")
@@ -249,7 +296,9 @@ def test_generate_report_persists_pdf_after_validation(tmp_path: Path) -> None:
     assert renderer.render_call_count == 1
 
     images_root = tmp_path / "sessions" / str(session_id) / "images"
+    annex_root = tmp_path / "sessions" / str(session_id) / "annexes"
     assert not images_root.exists()
+    assert not annex_root.exists()
 
     first_download = client.get(f"/reports/{session_id}/download")
     second_download = client.get(f"/reports/{session_id}/download")

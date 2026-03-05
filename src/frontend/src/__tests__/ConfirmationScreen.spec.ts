@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ANNEX_GROUPS } from '@/constants/annex-groups'
 import { PHOTO_GROUPS } from '@/constants/photo-groups'
 import { useReportIntakeDraft, type UploadItem } from '@/composables/use-report-intake-draft'
 import type { PhotoGroupName, ReportFormFields } from '@/types/report'
@@ -84,6 +85,10 @@ function resetDraftStore() {
   for (const group of PHOTO_GROUPS) {
     draft.selectionWarnings[group.name] = ''
     draft.uploads[group.name] = []
+  }
+  for (const group of ANNEX_GROUPS) {
+    draft.annexSelectionWarnings[group.name] = ''
+    draft.annexUploads[group.name] = []
   }
 
   return draft

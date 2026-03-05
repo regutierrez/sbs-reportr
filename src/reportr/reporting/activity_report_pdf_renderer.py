@@ -1,18 +1,66 @@
 from calendar import month_name
 from dataclasses import dataclass
 from html import escape
+from io import BytesIO
 from pathlib import Path
 from typing import Protocol
 
+from pypdf import PdfReader, PdfWriter
 from weasyprint import HTML
 
-from reportr.storage import PhotoGroupName, ReportFormFields, ReportSession
+from reportr.storage import AnnexGroupName, PhotoGroupName, ReportFormFields, ReportSession
 
 
 @dataclass(frozen=True, slots=True)
 class _ImageInfo:
     uri: str
     is_landscape: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _AnnexSectionInfo:
+    group_name: AnnexGroupName
+    numeral: str
+    title: str
+
+
+_ANNEX_SECTIONS: tuple[_AnnexSectionInfo, ...] = (
+    _AnnexSectionInfo(
+        group_name=AnnexGroupName.REBAR_SCANNING_OUTPUT,
+        numeral="I",
+        title="Rebar Scanning Output",
+    ),
+    _AnnexSectionInfo(
+        group_name=AnnexGroupName.REBOUND_NUMBER_TEST_RESULTS,
+        numeral="II",
+        title="Rebound Number Test Results",
+    ),
+    _AnnexSectionInfo(
+        group_name=AnnexGroupName.COMPRESSIVE_STRENGTH_TEST_RESULTS_SUPERSTRUCTURE,
+        numeral="III",
+        title="Compressive Strength Test Results (Superstructure)",
+    ),
+    _AnnexSectionInfo(
+        group_name=AnnexGroupName.TENSILE_STRENGTH_TEST_RESULTS,
+        numeral="IV",
+        title="Tensile Strength Test Results",
+    ),
+    _AnnexSectionInfo(
+        group_name=AnnexGroupName.COMPRESSIVE_STRENGTH_TEST_RESULTS_SUBSTRUCTURE,
+        numeral="V",
+        title="Compressive Strength Test Results (Substructure)",
+    ),
+    _AnnexSectionInfo(
+        group_name=AnnexGroupName.REBAR_SCANNING_RESULTS_FOR_FOUNDATION,
+        numeral="VI",
+        title="Rebar Scanning Results for Foundation",
+    ),
+    _AnnexSectionInfo(
+        group_name=AnnexGroupName.MATERIAL_TESTS_MAPPING,
+        numeral="VII",
+        title="Material Tests Mapping",
+    ),
+)
 
 
 class ActivityReportPdfRenderer(Protocol):
@@ -43,11 +91,16 @@ class WeasyPrintActivityReportPdfRenderer:
             raise RendererNotReadyError("Report session has no form fields to render.")
 
         html = self._build_html(session)
-        pdf_bytes = HTML(string=html, base_url=self._sessions_root.resolve().as_uri()).write_pdf()
-        if pdf_bytes is None:
+        report_pdf_bytes = HTML(
+            string=html, base_url=self._sessions_root.resolve().as_uri()
+        ).write_pdf()
+        if report_pdf_bytes is None:
             raise RendererNotReadyError("Activity report renderer returned no PDF bytes.")
 
-        return pdf_bytes
+        if not self._has_annex_documents(session):
+            return report_pdf_bytes
+
+        return self._merge_report_with_annex_documents(session, report_pdf_bytes)
 
     def _build_html(self, session: ReportSession) -> str:
         if session.form_fields is None:
@@ -765,6 +818,209 @@ class WeasyPrintActivityReportPdfRenderer:
                 "</div>"
             )
         return f'<div class="{grid_class_markup}">{"".join(items)}</div>'
+
+    def _has_annex_documents(self, session: ReportSession) -> bool:
+        return any(
+            session.annex_documents.get(annex.group_name.value) is not None
+            for annex in _ANNEX_SECTIONS
+        )
+
+    def _merge_report_with_annex_documents(
+        self, session: ReportSession, report_pdf_bytes: bytes
+    ) -> bytes:
+        if session.form_fields is None:
+            raise RendererNotReadyError("Report session has no form fields to render.")
+
+        writer = PdfWriter()
+        self._append_pdf_bytes(writer, report_pdf_bytes)
+
+        logo_uri = self._company_logo_uri()
+        building_name = session.form_fields.building_details.building_name
+
+        for annex in _ANNEX_SECTIONS:
+            annex_document = session.annex_documents.get(annex.group_name.value)
+            if annex_document is None:
+                continue
+
+            annex_path = (
+                self._sessions_root
+                / str(session.id)
+                / "annexes"
+                / annex.group_name.value
+                / annex_document.stored_filename
+            )
+            if not annex_path.exists():
+                continue
+
+            annex_cover_html = self._build_annex_cover_html(
+                building_name=building_name,
+                annex_numeral=annex.numeral,
+                annex_title=annex.title,
+                logo_uri=logo_uri,
+            )
+            annex_cover_pdf_bytes = HTML(
+                string=annex_cover_html,
+                base_url=self._sessions_root.resolve().as_uri(),
+            ).write_pdf()
+            if annex_cover_pdf_bytes is None:
+                raise RendererNotReadyError("Annex cover renderer returned no PDF bytes.")
+
+            self._append_pdf_bytes(writer, annex_cover_pdf_bytes)
+            self._append_pdf_path(writer, annex_path)
+
+        output = BytesIO()
+        writer.write(output)
+        return output.getvalue()
+
+    def _append_pdf_bytes(self, writer: PdfWriter, pdf_bytes: bytes) -> None:
+        reader = PdfReader(BytesIO(pdf_bytes))
+        for page in reader.pages:
+            writer.add_page(page)
+
+    def _append_pdf_path(self, writer: PdfWriter, pdf_path: Path) -> None:
+        reader = PdfReader(pdf_path)
+        for page in reader.pages:
+            writer.add_page(page)
+
+    def _build_annex_cover_html(
+        self,
+        *,
+        building_name: str,
+        annex_numeral: str,
+        annex_title: str,
+        logo_uri: str | None,
+    ) -> str:
+        header_logo_markup = (
+            '<p class="report-header__logo-fallback">Company Logo</p>'
+            if logo_uri is None
+            else f'<img class="report-header__logo" src="{logo_uri}" alt="Company logo" />'
+        )
+
+        return f"""
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @page {{
+        size: A4;
+        margin: 40mm 16mm 20mm;
+        @top-center {{
+          content: element(report-header);
+          width: 100%;
+        }}
+      }}
+
+      * {{
+        box-sizing: border-box;
+      }}
+
+      body {{
+        margin: 0;
+        color: #1b1b1b;
+        font: 12px/1.6 "Times New Roman", Times, serif;
+        background: #ffffff;
+      }}
+
+      .annex-cover {{
+        min-height: 237mm;
+        display: flex;
+        flex-direction: column;
+      }}
+
+      .report-header {{
+        position: running(report-header);
+        border-bottom: 1px solid #1f1f1f;
+        padding-bottom: 2.5mm;
+        font: 11px/1.2 "Times New Roman", Times, serif;
+      }}
+
+      .report-header__logo-wrap {{
+        margin-bottom: 1.2mm;
+      }}
+
+      .report-header__row + .report-header__row {{
+        margin-top: 0.4mm;
+      }}
+
+      .report-header__row {{
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        column-gap: 5mm;
+        align-items: baseline;
+      }}
+
+      .report-header__logo {{
+        width: 30mm;
+        height: auto;
+      }}
+
+      .report-header__logo-fallback {{
+        margin: 0;
+        font-weight: 700;
+      }}
+
+      .report-header__line {{
+        margin: 0;
+        font-size: 11px;
+      }}
+
+      .report-header__line--title,
+      .report-header__line--report {{
+        font-weight: 700;
+      }}
+
+      .report-header__line--building {{
+        white-space: normal;
+      }}
+
+      .annex-cover__body {{
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        gap: 4mm;
+      }}
+
+      .annex-cover__title {{
+        margin: 0;
+        font: 700 36pt/1.1 "Times New Roman", Times, serif;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }}
+
+      .annex-cover__subtitle {{
+        margin: 0;
+        font: 700 13pt/1.3 "Times New Roman", Times, serif;
+      }}
+    </style>
+  </head>
+  <body>
+    <section class="annex-cover">
+      <header class="report-header">
+        <div class="report-header__logo-wrap">{header_logo_markup}</div>
+        <div class="report-header__meta">
+          <div class="report-header__row">
+            <p class="report-header__line report-header__line--title">Material Testing Works</p>
+            <p class="report-header__line report-header__line--report">Annex</p>
+          </div>
+          <div class="report-header__row">
+            <p class="report-header__line report-header__line--building">{escape(building_name)}</p>
+            <p class="report-header__line">&nbsp;</p>
+          </div>
+        </div>
+      </header>
+
+      <main class="annex-cover__body">
+        <h1 class="annex-cover__title">ANNEX {escape(annex_numeral)}</h1>
+        <p class="annex-cover__subtitle">{escape(annex_title)}</p>
+      </main>
+    </section>
+  </body>
+</html>
+"""
 
     def _company_logo_uri(self) -> str | None:
         logo_path = Path(__file__).resolve().parents[2] / "frontend" / "public" / "asset-80.svg"

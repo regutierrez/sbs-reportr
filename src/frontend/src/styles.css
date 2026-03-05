@@ -102,12 +102,17 @@ body {
   background: color-mix(in srgb, var(--navy) 3%, white);
 }
 
+.upload-dropzone--pdf {
+  background: color-mix(in srgb, var(--navy) 5%, white);
+}
+
 .upload-dropzone:hover {
   border-color: var(--orange);
 }
 
 .upload-dropzone__input,
-.upload-dropzone__camera-input {
+.upload-dropzone__camera-input,
+.upload-dropzone__pdf-input {
   display: none;
 }
 
@@ -137,6 +142,10 @@ body {
   gap: 0.5rem;
   font-size: 0.78rem;
   color: var(--muted);
+}
+
+.upload-list__item--document {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .upload-list__thumbnail {

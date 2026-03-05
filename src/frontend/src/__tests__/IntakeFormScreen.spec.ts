@@ -1,9 +1,14 @@
 import { flushPromises, mount, type DOMWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ANNEX_GROUPS } from '@/constants/annex-groups'
 import { PHOTO_GROUPS } from '@/constants/photo-groups'
-import { useReportIntakeDraft, type UploadItem } from '@/composables/use-report-intake-draft'
-import type { PhotoGroupName, ReportFormFields } from '@/types/report'
+import {
+  useReportIntakeDraft,
+  type AnnexUploadItem,
+  type UploadItem,
+} from '@/composables/use-report-intake-draft'
+import type { AnnexGroupName, PhotoGroupName, ReportFormFields } from '@/types/report'
 import IntakeFormScreen from '@/screens/IntakeFormScreen.vue'
 
 const {
@@ -11,6 +16,7 @@ const {
   createReportSessionMock,
   routerPushMock,
   saveReportFormFieldsMock,
+  uploadReportAnnexPdfMock,
   uploadReportImageMock,
 } = vi.hoisted(() => {
   return {
@@ -18,6 +24,7 @@ const {
     createReportSessionMock: vi.fn(),
     routerPushMock: vi.fn(),
     saveReportFormFieldsMock: vi.fn(),
+    uploadReportAnnexPdfMock: vi.fn(),
     uploadReportImageMock: vi.fn(),
   }
 })
@@ -46,6 +53,7 @@ vi.mock('@/api', () => {
     ApiError,
     createReportSession: createReportSessionMock,
     saveReportFormFields: saveReportFormFieldsMock,
+    uploadReportAnnexPdf: uploadReportAnnexPdfMock,
     uploadReportImage: uploadReportImageMock,
   }
 })
@@ -97,6 +105,10 @@ function resetDraftStore() {
   for (const group of PHOTO_GROUPS) {
     draft.selectionWarnings[group.name] = ''
     draft.uploads[group.name] = []
+  }
+  for (const group of ANNEX_GROUPS) {
+    draft.annexSelectionWarnings[group.name] = ''
+    draft.annexUploads[group.name] = []
   }
 
   return draft
@@ -159,6 +171,27 @@ function createUploadItem(groupName: PhotoGroupName, uploaded: boolean): UploadI
   }
 }
 
+function createAnnexUploadItem(groupName: AnnexGroupName, uploaded: boolean): AnnexUploadItem {
+  const file = new File(['pdf'], `${groupName}.pdf`, { type: 'application/pdf' })
+
+  return {
+    id: `annex-${groupName}`,
+    name: file.name,
+    file,
+    status: uploaded ? 'uploaded' : 'pending',
+    message: uploaded ? 'Uploaded' : 'Queued',
+    uploadedDocument: uploaded
+      ? {
+          id: `document-${groupName}`,
+          group_name: groupName,
+          original_filename: file.name,
+          stored_filename: `stored-${groupName}.pdf`,
+          size_bytes: 4096,
+        }
+      : null,
+  }
+}
+
 async function triggerFileSelection(input: DOMWrapper<Element>, files: File[]): Promise<void> {
   const element = input.element as HTMLInputElement
   Object.defineProperty(element, 'files', {
@@ -180,6 +213,7 @@ describe('IntakeFormScreen', () => {
       global: {
         stubs: {
           ImageUploadField: true,
+          PdfUploadField: true,
           SectionHeader: true,
         },
       },
@@ -197,6 +231,7 @@ describe('IntakeFormScreen', () => {
     const wrapper = mount(IntakeFormScreen, {
       global: {
         stubs: {
+          PdfUploadField: true,
           SectionHeader: true,
         },
       },
@@ -240,6 +275,7 @@ describe('IntakeFormScreen', () => {
     const wrapper = mount(IntakeFormScreen, {
       global: {
         stubs: {
+          PdfUploadField: true,
           SectionHeader: true,
         },
       },
@@ -288,6 +324,7 @@ describe('IntakeFormScreen', () => {
       global: {
         stubs: {
           ImageUploadField: true,
+          PdfUploadField: true,
           SectionHeader: true,
         },
       },
@@ -299,6 +336,7 @@ describe('IntakeFormScreen', () => {
     expect(createReportSessionMock).toHaveBeenCalledTimes(1)
     expect(saveReportFormFieldsMock).toHaveBeenCalledTimes(1)
     expect(uploadReportImageMock).not.toHaveBeenCalled()
+    expect(uploadReportAnnexPdfMock).not.toHaveBeenCalled()
     expect(routerPushMock).toHaveBeenCalledWith({ name: 'confirmation' })
     expect(draft.sessionId.value).toBe('session-1')
     expect(draft.confirmationReady.value).toBe(true)
@@ -336,6 +374,7 @@ describe('IntakeFormScreen', () => {
       global: {
         stubs: {
           ImageUploadField: true,
+          PdfUploadField: true,
           SectionHeader: true,
         },
       },
@@ -347,6 +386,7 @@ describe('IntakeFormScreen', () => {
     expect(createReportSessionMock).not.toHaveBeenCalled()
     expect(compressImageForUploadMock).toHaveBeenCalledTimes(1)
     expect(uploadReportImageMock).toHaveBeenCalledWith('session-2', pendingGroup, compressedFile)
+    expect(uploadReportAnnexPdfMock).not.toHaveBeenCalled()
 
     const pendingItem = draft.uploads[pendingGroup][0]
     if (!pendingItem) {
@@ -355,6 +395,59 @@ describe('IntakeFormScreen', () => {
 
     expect(pendingItem.status).toBe('uploaded')
     expect(pendingItem.uploadedImage).not.toBeNull()
+    expect(routerPushMock).toHaveBeenCalledWith({ name: 'confirmation' })
+  })
+
+  it('uploads selected annex PDFs when provided', async () => {
+    const draft = resetDraftStore()
+    fillRequiredForm(draft.form)
+    draft.sessionId.value = 'session-3'
+
+    for (const group of PHOTO_GROUPS) {
+      draft.uploads[group.name] = [createUploadItem(group.name, true)]
+    }
+
+    const annexGroup = ANNEX_GROUPS[0]?.name
+    if (!annexGroup) {
+      throw new Error('Expected at least one annex group config.')
+    }
+
+    for (const group of ANNEX_GROUPS) {
+      draft.annexUploads[group.name] = [createAnnexUploadItem(group.name, group.name !== annexGroup)]
+    }
+
+    uploadReportAnnexPdfMock.mockResolvedValue({
+      document: {
+        id: 'uploaded-document',
+        group_name: annexGroup,
+        original_filename: `${annexGroup}.pdf`,
+        stored_filename: 'uploaded-annex.pdf',
+        size_bytes: 2048,
+      },
+    })
+    saveReportFormFieldsMock.mockResolvedValue({})
+
+    const wrapper = mount(IntakeFormScreen, {
+      global: {
+        stubs: {
+          ImageUploadField: true,
+          PdfUploadField: true,
+          SectionHeader: true,
+        },
+      },
+    })
+
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    const pendingAnnex = draft.annexUploads[annexGroup][0]
+    if (!pendingAnnex) {
+      throw new Error('Expected pending annex upload item to be present.')
+    }
+
+    expect(uploadReportAnnexPdfMock).toHaveBeenCalledWith('session-3', annexGroup, pendingAnnex.file)
+    expect(pendingAnnex.status).toBe('uploaded')
+    expect(pendingAnnex.uploadedDocument).not.toBeNull()
     expect(routerPushMock).toHaveBeenCalledWith({ name: 'confirmation' })
   })
 })
