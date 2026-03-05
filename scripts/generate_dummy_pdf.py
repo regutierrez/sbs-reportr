@@ -3,37 +3,71 @@ import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+
 from PIL import Image
+from pypdf import PdfWriter
 
 # Add the src directory to the python path so we can import reportr modules
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from reportr.reporting.activity_report_pdf_renderer import WeasyPrintActivityReportPdfRenderer
 from reportr.storage.models import (
-    ReportSession,
-    ReportFormFields,
+    PHOTO_GROUP_LIMITS,
+    AnnexDocumentMeta,
+    AnnexGroupName,
     BuildingDetailsFormFields,
-    SuperstructureFormFields,
-    SubstructureFormFields,
+    ImageMeta,
+    PhotoGroupName,
+    ReportFormFields,
+    ReportSession,
+    ReportStatus,
     SignatureFormFields,
+    SubstructureConcreteCoreExtractionFormFields,
+    SubstructureFormFields,
+    SuperstructureConcreteCoreExtractionFormFields,
+    SuperstructureFormFields,
+    SuperstructureRebarExtractionFormFields,
     SuperstructureRebarScanningFormFields,
     SuperstructureReboundHammerTestFormFields,
-    SuperstructureConcreteCoreExtractionFormFields,
-    SuperstructureRebarExtractionFormFields,
     SuperstructureRestorationWorksFormFields,
-    SubstructureConcreteCoreExtractionFormFields,
-    PhotoGroupName,
-    ImageMeta,
-    ReportStatus,
 )
-from reportr.reporting.activity_report_pdf_renderer import WeasyPrintActivityReportPdfRenderer
 
 DUMMY_ROOT = Path("/tmp/reportr/dummy")
 
+PageSize = tuple[float, float]
+A4_PORTRAIT: PageSize = (595.0, 842.0)
+A4_LANDSCAPE: PageSize = (842.0, 595.0)
+LETTER_PORTRAIT: PageSize = (612.0, 792.0)
+LETTER_LANDSCAPE: PageSize = (792.0, 612.0)
 
-def copy_dummy_images(session_id: uuid.UUID, sessions_root: Path):
+ANNEX_PAGE_LAYOUTS: dict[AnnexGroupName, tuple[PageSize, ...]] = {
+    AnnexGroupName.REBAR_SCANNING_OUTPUT: (A4_LANDSCAPE,),
+    AnnexGroupName.REBOUND_NUMBER_TEST_RESULTS: (A4_PORTRAIT,),
+    AnnexGroupName.COMPRESSIVE_STRENGTH_TEST_RESULTS_SUPERSTRUCTURE: (
+        A4_PORTRAIT,
+        A4_LANDSCAPE,
+    ),
+    AnnexGroupName.TENSILE_STRENGTH_TEST_RESULTS: (LETTER_LANDSCAPE,),
+    AnnexGroupName.COMPRESSIVE_STRENGTH_TEST_RESULTS_SUBSTRUCTURE: (
+        LETTER_PORTRAIT,
+        A4_PORTRAIT,
+    ),
+    AnnexGroupName.REBAR_SCANNING_RESULTS_FOR_FOUNDATION: (
+        A4_LANDSCAPE,
+        LETTER_LANDSCAPE,
+    ),
+    AnnexGroupName.MATERIAL_TESTS_MAPPING: (
+        A4_PORTRAIT,
+        A4_LANDSCAPE,
+        A4_PORTRAIT,
+    ),
+}
+
+
+def copy_dummy_images(session_id: uuid.UUID, sessions_root: Path) -> dict[str, list[ImageMeta]]:
     """Copy extracted images into the session folder to simulate uploaded photos."""
-    import shutil
     import glob
+    import shutil
 
     extracted_dir = Path("extracted_images")
     if not extracted_dir.exists():
@@ -60,49 +94,41 @@ def copy_dummy_images(session_id: uuid.UUID, sessions_root: Path):
         PhotoGroupName.SUBSTRUCTURE_RESTORATION_BACKFILLING_COMPACTION_PHOTOS: "*C.3. Restoration*.jpeg",
     }
 
-    images_metadata = {}
-
-    from reportr.storage.models import PHOTO_GROUP_LIMITS
+    images_metadata: dict[str, list[ImageMeta]] = {}
 
     for group_name, pattern in mappings.items():
         group_dir = session_images_dir / group_name.value
         os.makedirs(group_dir, exist_ok=True)
 
         if group_name == PhotoGroupName.SUPERSTRUCTURE_REBAR_SCANNING_PHOTOS:
-            matched_files = [
-                str(
-                    extracted_dir
-                    / "C. DATA GATHERING FOR SUBSTRUCTURE - C.3. Restoration for Coring Works, Backfilling, and Compaction - 4.jpeg"
-                ),
-                str(
-                    extracted_dir
-                    / "C. DATA GATHERING FOR SUBSTRUCTURE - C.3. Restoration for Coring Works, Backfilling, and Compaction - 5.jpeg"
-                ),
-                str(
-                    extracted_dir
-                    / "C. DATA GATHERING FOR SUBSTRUCTURE - C.3. Restoration for Coring Works, Backfilling, and Compaction - 6.jpeg"
-                ),
-                str(
-                    extracted_dir
-                    / "B. DATA GATHERING FOR SUPERSTRUCTURE - B.1. Rebar Scanning - 1.jpeg"
-                ),
-                str(
-                    extracted_dir
-                    / "B. DATA GATHERING FOR SUPERSTRUCTURE - B.1. Rebar Scanning - 2.jpeg"
-                ),
+            candidate_files = [
+                extracted_dir
+                / "C. DATA GATHERING FOR SUBSTRUCTURE - C.3. Restoration for Coring Works, Backfilling, and Compaction - 4.jpeg",
+                extracted_dir
+                / "C. DATA GATHERING FOR SUBSTRUCTURE - C.3. Restoration for Coring Works, Backfilling, and Compaction - 5.jpeg",
+                extracted_dir
+                / "C. DATA GATHERING FOR SUBSTRUCTURE - C.3. Restoration for Coring Works, Backfilling, and Compaction - 6.jpeg",
+                extracted_dir
+                / "B. DATA GATHERING FOR SUPERSTRUCTURE - B.1. Rebar Scanning - 1.jpeg",
+                extracted_dir
+                / "B. DATA GATHERING FOR SUPERSTRUCTURE - B.1. Rebar Scanning - 2.jpeg",
             ]
+            matched_files = [str(path) for path in candidate_files if path.exists()]
         else:
             matched_files = glob.glob(str(extracted_dir / pattern))
 
         # Limit the number of photos to the maximum defined by the model
         _, max_images = PHOTO_GROUP_LIMITS.get(group_name, (1, 4))
 
-        group_metadata = []
+        group_metadata: list[ImageMeta] = []
         for i, filepath in enumerate(matched_files):
             if i >= max_images:
                 break
 
             src = Path(filepath)
+            if not src.exists():
+                continue
+
             dest_filename = f"{uuid.uuid4()}.jpeg"
             dest = group_dir / dest_filename
             shutil.copy2(src, dest)
@@ -129,13 +155,63 @@ def copy_dummy_images(session_id: uuid.UUID, sessions_root: Path):
     return images_metadata
 
 
-def create_dummy_session():
+def _page_orientation(width: float, height: float) -> str:
+    if width > height:
+        return "landscape"
+    if height > width:
+        return "portrait"
+    return "square"
+
+
+def _write_dummy_pdf(path: Path, page_sizes: tuple[PageSize, ...]) -> None:
+    writer = PdfWriter()
+    for width, height in page_sizes:
+        writer.add_blank_page(width=width, height=height)
+
+    with path.open("wb") as output_file:
+        writer.write(output_file)
+
+
+def create_dummy_annex_documents(
+    session_id: uuid.UUID, sessions_root: Path
+) -> dict[str, AnnexDocumentMeta]:
+    """Create one annex PDF per group with varied page orientations."""
+    annex_documents: dict[str, AnnexDocumentMeta] = {}
+    session_annexes_dir = sessions_root / str(session_id) / "annexes"
+    os.makedirs(session_annexes_dir, exist_ok=True)
+
+    for group_name, page_sizes in ANNEX_PAGE_LAYOUTS.items():
+        group_dir = session_annexes_dir / group_name.value
+        os.makedirs(group_dir, exist_ok=True)
+
+        document_id = uuid.uuid4()
+        stored_filename = f"{document_id}.pdf"
+        annex_path = group_dir / stored_filename
+
+        _write_dummy_pdf(annex_path, page_sizes)
+
+        orientations = ", ".join(_page_orientation(width, height) for width, height in page_sizes)
+        print(f"Created annex {group_name.value}: {stored_filename} ({orientations})")
+
+        annex_documents[group_name.value] = AnnexDocumentMeta(
+            id=document_id,
+            group_name=group_name,
+            original_filename=f"{group_name.value}.pdf",
+            stored_filename=stored_filename,
+            size_bytes=annex_path.stat().st_size,
+        )
+
+    return annex_documents
+
+
+def create_dummy_session() -> tuple[ReportSession, Path]:
     # Setup directories
     sessions_root = DUMMY_ROOT / "sessions"
     session_id = uuid.uuid4()
     os.makedirs(sessions_root / str(session_id), exist_ok=True)
 
     images_metadata = copy_dummy_images(session_id, sessions_root)
+    annex_documents = create_dummy_annex_documents(session_id, sessions_root)
 
     # Create mock form fields
     form_fields = ReportFormFields(
@@ -176,25 +252,27 @@ def create_dummy_session():
         status=ReportStatus.DRAFT,
         form_fields=form_fields,
         images=images_metadata,
+        annex_documents=annex_documents,
     )
 
     return session, sessions_root
 
 
-def main():
+def main() -> None:
     print("Setting up dummy session and copying images...")
     session, sessions_root = create_dummy_session()
 
-    print("Initializing PDF Renderer...")
+    print("Initializing PDF renderer...")
     renderer = WeasyPrintActivityReportPdfRenderer(sessions_root=sessions_root)
 
     output_pdf = DUMMY_ROOT / "dummy_report.pdf"
-    print(f"Rendering PDF to {output_pdf}...")
+    print(f"Rendering merged report + annexes PDF to {output_pdf}...")
 
     try:
         pdf_bytes = renderer.render(session)
         output_pdf.write_bytes(pdf_bytes)
         print(f"Success! Created {output_pdf}")
+        print(f"Session fixtures created under {(sessions_root / str(session.id)).resolve()}")
     except Exception as e:
         print(f"Error rendering PDF: {e}")
         import traceback
