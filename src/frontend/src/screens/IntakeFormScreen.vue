@@ -294,6 +294,10 @@ function normalizeErrorMessage(error: unknown): string {
 }
 
 function buildFormPayload(): ReportFormFields {
+  const hasSubstructure =
+    form.substructure.concrete_core_extraction.number_of_foundation_locations >= 1 ||
+    form.substructure.concrete_core_extraction.number_of_foundation_cores_extracted >= 1;
+
   return {
     building_details: {
       testing_date: form.building_details.testing_date,
@@ -324,14 +328,18 @@ function buildFormPayload(): ReportFormFields {
         epoxy_ab_used: form.superstructure.restoration_works.epoxy_ab_used.trim(),
       },
     },
-    substructure: {
-      concrete_core_extraction: {
-        number_of_foundation_locations:
-          form.substructure.concrete_core_extraction.number_of_foundation_locations,
-        number_of_foundation_cores_extracted:
-          form.substructure.concrete_core_extraction.number_of_foundation_cores_extracted,
-      },
-    },
+    ...(hasSubstructure
+      ? {
+          substructure: {
+            concrete_core_extraction: {
+              number_of_foundation_locations:
+                form.substructure.concrete_core_extraction.number_of_foundation_locations,
+              number_of_foundation_cores_extracted:
+                form.substructure.concrete_core_extraction.number_of_foundation_cores_extracted,
+            },
+          },
+        }
+      : {}),
     signature: {
       prepared_by: form.signature.prepared_by.trim(),
       prepared_by_role: form.signature.prepared_by_role.trim(),

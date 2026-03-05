@@ -131,11 +131,19 @@ class WeasyPrintActivityReportPdfRenderer:
         rebar_samples = _words_with_digits(
             form.superstructure.rebar_extraction.number_of_rebar_samples_extracted
         )
-        foundation_locations = _words_with_digits(
-            form.substructure.concrete_core_extraction.number_of_foundation_locations
+        foundation_locations = (
+            _words_with_digits(
+                form.substructure.concrete_core_extraction.number_of_foundation_locations
+            )
+            if form.substructure is not None
+            else "zero (0)"
         )
-        foundation_cores = _words_with_digits(
-            form.substructure.concrete_core_extraction.number_of_foundation_cores_extracted
+        foundation_cores = (
+            _words_with_digits(
+                form.substructure.concrete_core_extraction.number_of_foundation_cores_extracted
+            )
+            if form.substructure is not None
+            else "zero (0)"
         )
         grout_product = escape(form.superstructure.restoration_works.non_shrink_grout_product_used)
         epoxy_product = escape(form.superstructure.restoration_works.epoxy_ab_used)

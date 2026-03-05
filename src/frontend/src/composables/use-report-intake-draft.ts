@@ -32,7 +32,7 @@ export interface AnnexUploadItem {
   uploadedDocument: AnnexDocumentMeta | null
 }
 
-function createInitialForm(): ReportFormFields {
+function createInitialForm(): Required<ReportFormFields> {
   return {
     building_details: {
       testing_date: '',
@@ -111,7 +111,7 @@ function createAnnexSelectionWarningsMap(): Record<AnnexGroupName, string> {
   )
 }
 
-const form = reactive<ReportFormFields>(createInitialForm())
+const form = reactive<Required<ReportFormFields>>(createInitialForm())
 const sessionId = ref<string | null>(null)
 const uploads = reactive(createUploadItemsMap())
 const selectionWarnings = reactive(createSelectionWarningsMap())

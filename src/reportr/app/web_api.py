@@ -429,9 +429,6 @@ def _get_image_dimensions(source: BinaryIO) -> tuple[int, int]:
     return width, height
 
 
-
-
-
 def _resolve_default_data_root() -> Path:
     source_root = Path(__file__).resolve().parents[2]
     if source_root.name == "src":

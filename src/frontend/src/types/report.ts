@@ -53,7 +53,7 @@ export interface SignatureFormFields {
 export interface ReportFormFields {
   building_details: BuildingDetailsFormFields
   superstructure: SuperstructureFormFields
-  substructure: SubstructureFormFields
+  substructure?: SubstructureFormFields
   signature: SignatureFormFields
 }
 

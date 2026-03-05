@@ -54,9 +54,9 @@ PHOTO_GROUP_LIMITS: dict[PhotoGroupName, tuple[int, int]] = {
     PhotoGroupName.SUPERSTRUCTURE_REBAR_SAMPLES_FAMILY_PIC: (1, 5),
     PhotoGroupName.SUPERSTRUCTURE_CHIPPING_OF_SLAB_PHOTOS: (1, 5),
     PhotoGroupName.SUPERSTRUCTURE_RESTORATION_PHOTOS: (1, 5),
-    PhotoGroupName.SUBSTRUCTURE_CORING_FOR_FOUNDATION_PHOTOS: (1, 5),
-    PhotoGroupName.SUBSTRUCTURE_REBAR_SCANNING_FOR_FOUNDATION_PHOTOS: (1, 5),
-    PhotoGroupName.SUBSTRUCTURE_RESTORATION_BACKFILLING_COMPACTION_PHOTOS: (1, 5),
+    PhotoGroupName.SUBSTRUCTURE_CORING_FOR_FOUNDATION_PHOTOS: (0, 5),
+    PhotoGroupName.SUBSTRUCTURE_REBAR_SCANNING_FOR_FOUNDATION_PHOTOS: (0, 5),
+    PhotoGroupName.SUBSTRUCTURE_RESTORATION_BACKFILLING_COMPACTION_PHOTOS: (0, 5),
 }
 
 ANNEX_GROUP_LIMITS: dict[AnnexGroupName, tuple[int, int]] = {
@@ -123,7 +123,7 @@ class SignatureFormFields(BaseModel):
 class ReportFormFields(BaseModel):
     building_details: BuildingDetailsFormFields
     superstructure: SuperstructureFormFields
-    substructure: SubstructureFormFields
+    substructure: SubstructureFormFields | None = None
     signature: SignatureFormFields
 
 

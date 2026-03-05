@@ -114,7 +114,7 @@ function resetDraftStore() {
   return draft
 }
 
-function fillRequiredForm(form: ReportFormFields): void {
+function fillRequiredForm(form: Required<ReportFormFields>): void {
   Object.assign(form.building_details, {
     testing_date: '2026-02',
     building_name: 'Acacia Residences',
