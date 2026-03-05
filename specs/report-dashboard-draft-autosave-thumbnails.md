@@ -1,12 +1,11 @@
-## Feature: Report Dashboard, Draft Autosave, and Intake Photo Thumbnails
+## Feature: Report Dashboard and Draft Autosave
 
 ### Discovery Summary (Current Architecture)
 - Backend is a FastAPI service (`src/reportr/app/web_api.py`) backed by a filesystem repository (`src/reportr/storage/report_repository.py`).
-- Session metadata is stored in `data/sessions/<session_id>/session.json`; generated PDFs are in `data/reports/<session_id>/`.
 - `ReportSession` currently tracks `id`, `created_at`, `status`, `form_fields`, `images`, and `generated_pdf_path`, but **does not** track last modified metadata or user emails.
 - Current intake flow is route-based (`/` intake -> `/confirm` confirmation) but state is kept in a singleton in-memory composable (`use-report-intake-draft.ts`), so refresh/navigation can lose progress.
-- Images are currently uploaded only during form submit; `ImageUploadField.vue` lists file names/status and does not render thumbnails.
-- Completed generation currently deletes session images (`cleanup_session_images` after generate), which conflicts with reopening completed records and thumbnail preview requirements.
+- Completed generation currently deletes session images (`cleanup_session_images` after generate), which conflicts with reopening completed records.
+- Storage is purely filesystem-based JSON; no database is used today.
 
 ---
 
@@ -16,7 +15,6 @@
 **What:**
 1. They need a dashboard showing all report files (in-progress, completed, archived) with created/modified timestamps and created/last-modified email addresses.
 2. They need progress persistence so they can leave and resume without losing work (autosave + explicit save affordance).
-3. They need image thumbnails in intake instead of filename-only rows, both for newly selected files and when reopening existing records.
 
 **Why it matters:** Current all-or-nothing flow causes lost work and poor visibility across users, slowing operations and causing duplicate effort.
 
@@ -27,23 +25,24 @@
 ### Proposed Solution (Recommended: Balanced)
 Implement persistent server-backed draft editing with an all-user dashboard and Cloudflare Access identity plumbing.
 
-1. **Lifecycle + metadata foundation**
+1. **SQLite for session metadata**
+   - Use a SQLite database (`data/reportr.db`) for all session metadata.
+   - Images and generated PDFs remain on the filesystem.
+   - Schema created on first startup if the database does not exist.
+
+2. **Lifecycle + metadata foundation**
    - Extend session metadata with `updated_at`, `created_by_email`, `updated_by_email`, plus archive metadata.
    - Add explicit archive lifecycle while keeping existing completion flow.
 
-2. **Dashboard APIs + page**
+3. **Dashboard APIs + page**
    - Add list/read/status APIs and a new dashboard route as the app entry page.
    - Dashboard shows status, created/updated timestamps, and created/updated emails.
    - Dashboard actions: open/edit, download (if completed), archive, restore.
 
-3. **Draft persistence and autosave**
+4. **Draft persistence and autosave**
    - Persist form drafts server-side as users edit.
    - Use debounced autosave with a visible save state (`Saving…`, `Saved at…`, `Save failed`).
    - Keep manual **Save Draft** button as explicit fallback/retry.
-
-4. **Thumbnail-capable image handling**
-   - Add image retrieval endpoint(s) for stored images.
-   - Intake UI renders thumbnail previews for local selections and server-loaded images when resuming drafts/completed records.
 
 5. **Cloudflare Access identity plumbing**
    - Validate `Cf-Access-Jwt-Assertion` when CF Access env vars are configured.
@@ -52,8 +51,7 @@ Implement persistent server-backed draft editing with an all-user dashboard and 
 ---
 
 ### Constraints Inventory
-- Existing filesystem repository must remain primary storage.
-- Existing data under `data/sessions` must remain readable (backward compatibility).
+- SQLite for session metadata; images and PDFs remain on the filesystem.
 - Vue stack should stay Composition API + `<script setup lang="ts">`.
 - No Docker/dev server changes implied in this spec.
 - Keep implementation minimal; avoid introducing role-based permissions in this phase.
@@ -64,23 +62,23 @@ Implement persistent server-backed draft editing with an all-user dashboard and 
 | Option | Description | Pros | Cons |
 |---|---|---|---|
 | Simplest | LocalStorage autosave only + no backend dashboard metadata | Fastest | Fails all-user dashboard/audit requirements |
-| **Balanced (Chosen)** | Server-backed drafts + dashboard + CF identity + thumbnail retrieval | Meets requirements with moderate complexity | Requires backend+frontend cross-cutting changes |
-| Full engineering | Balanced + record version history + optimistic locking + role controls | Strong audit/concurrency model | Significant scope increase (XL+) |
+| **Balanced (Chosen)** | SQLite-backed drafts + dashboard + CF identity | Meets requirements with moderate complexity; atomic writes; clean path to optimistic locking | Requires backend+frontend cross-cutting changes |
+| Full engineering | Balanced + optimistic locking + real-time sync + role controls | Strong concurrency model | Significant scope increase (XL+) |
 
 ---
 
 ### Scope & Deliverables
 | Deliverable | Effort | Depends On |
 |---|---|---|
-| D1. Extend backend models/repository for audit + archive lifecycle | L | - |
-| D2. Add API contracts for dashboard list/read, image preview, archive/restore, and draft-save identity stamping | L | D1 |
-| D3. Implement Cloudflare Access email extraction/validation dependency | M | D1 |
-| D4. Build Dashboard screen + routing + actions | M | D2 |
-| D5. Implement intake autosave/manual save status + resume existing session loading | L | D2, D4 |
-| D6. Add thumbnail rendering for local and persisted images in intake flow | M | D2, D5 |
-| D7. Tests (backend + frontend) and backward-compatibility coverage | M | D1-D6 |
+| D1. SQLite schema + repository implementation | L | - |
+| D2. Extend models for audit metadata + archive lifecycle | M | D1 |
+| D3. Add API contracts for dashboard list/read, image preview, archive/restore, and draft-save identity stamping | L | D2 |
+| D4. Implement Cloudflare Access email extraction/validation dependency | M | D2 |
+| D5. Build Dashboard screen + routing + actions | M | D3 |
+| D6. Implement intake autosave/manual save status + resume existing session loading | L | D3, D5 |
+| D7. Tests (backend + frontend) | M | D1-D6 |
 
-**Total effort:** XL (cross-cutting changes, >2 days)
+**Total effort:** L (cross-cutting changes, ~2 days)
 
 ---
 
@@ -88,11 +86,39 @@ Implement persistent server-backed draft editing with an all-user dashboard and 
 - Hard delete/permanent delete workflow (archive only in this phase).
 - Role-based authorization (all authenticated users can view and act on records).
 - Real-time collaborative editing conflict resolution (last-write-wins for now).
+- Optimistic locking enforcement (`version` column is added but not checked in this phase).
 - PDF version history/diffing.
 
 ---
 
 ### Data Model
+
+#### Storage architecture
+- **SQLite database** at `data/reportr.db` stores all session metadata (WAL mode for concurrent read/write safety).
+- **Filesystem** stores uploaded images (`data/sessions/<session_id>/images/`) and generated PDFs (`data/reports/<session_id>/`).
+- Use `aiosqlite` for async access from FastAPI.
+
+#### SQLite schema
+
+```sql
+CREATE TABLE sessions (
+    id               TEXT PRIMARY KEY,
+    status           TEXT NOT NULL DEFAULT 'draft',  -- draft, generating, completed, archived
+    form_fields      TEXT,                           -- JSON blob (ReportDraftFields)
+    images           TEXT,                           -- JSON blob (image group metadata)
+    generated_pdf_path TEXT,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    created_by_email TEXT NOT NULL,
+    updated_by_email TEXT NOT NULL,
+    archived_at      TEXT,
+    archived_by_email TEXT,
+    version          INTEGER NOT NULL DEFAULT 1      -- reserved for future optimistic locking
+);
+
+CREATE INDEX idx_sessions_status ON sessions(status);
+CREATE INDEX idx_sessions_updated_at ON sessions(updated_at);
+```
 
 #### Backend model changes
 1. `ReportStatus` (retain compatibility):
@@ -107,6 +133,7 @@ Implement persistent server-backed draft editing with an all-user dashboard and 
    - `updated_by_email: str`
    - `archived_at: datetime | None`
    - `archived_by_email: str | None`
+   - `version: int` (default `1`, reserved for future optimistic locking — not enforced in this phase)
 
 3. `ImageMeta` additions:
    - `uploaded_at: datetime`
@@ -114,23 +141,12 @@ Implement persistent server-backed draft editing with an all-user dashboard and 
 
 4. Draft fields strategy:
    - Introduce `ReportDraftFields` (same shape as current form but tolerant of incomplete values).
-   - `ReportSession.form_fields` stores draft-safe form state.
-   - `generate` path validates/coerces `form_fields` into strict `ReportFormFields` before rendering.
+   - `form_fields` stored as JSON text column in SQLite.
+   - `generate` path validates/coerces into strict `ReportFormFields` before rendering.
 
 #### Frontend type additions
 - `ReportListItem` (dashboard summary)
 - Save-state enum: `idle | saving | saved | error`
-- `UploadItem` updated to support both local and persisted entries:
-  - `file: File | null`
-  - `previewUrl: string`
-  - `source: 'local' | 'remote'`
-
-#### Backward compatibility rules
-- Existing `session.json` files lacking new fields should hydrate with defaults:
-  - `updated_at = created_at`
-  - `created_by_email = "unknown@legacy"`
-  - `updated_by_email = "unknown@legacy"`
-  - archive fields default `null`
 
 ---
 
@@ -164,7 +180,7 @@ Implement persistent server-backed draft editing with an all-user dashboard and 
    - If status is `completed`, transition to `draft` and clear stale PDF reference.
 
 5. `GET /reports/{session_id}/images/{group_name}/{image_id}`
-   - Returns image bytes for thumbnail rendering.
+   - Returns image bytes for persisted image retrieval.
 
 6. `PATCH /reports/{session_id}/status`
    - Allowed transitions in this phase:
@@ -175,7 +191,7 @@ Implement persistent server-backed draft editing with an all-user dashboard and 
 7. Existing `POST /reports/{session_id}/generate`
    - Validates strict completeness from stored draft.
    - Sets status `generating -> completed` on success.
-   - **Do not delete session images on completion** (required for reopen + thumbnails).
+   - **Do not delete session images on completion** (required for reopen).
 
 ---
 
@@ -211,11 +227,6 @@ Implement persistent server-backed draft editing with an all-user dashboard and 
    - Add `Save Draft` button + save-state indicator.
    - On load (edit route), fetch session and hydrate form + uploads.
 
-4. **Thumbnails in `ImageUploadField.vue`**
-   - Render thumbnail grid (small preview + filename + upload state).
-   - Show local object URL for newly selected files.
-   - Show server URL previews for persisted images.
-
 ---
 
 ### Acceptance Criteria
@@ -225,19 +236,17 @@ Implement persistent server-backed draft editing with an all-user dashboard and 
 - [ ] Editing a completed record transitions it back to in-progress (`draft`) and requires regeneration for a fresh PDF.
 - [ ] Intake form autosaves after changes (debounced), and a manual Save Draft button is available.
 - [ ] Intake screen displays save state (`Saving…`, `Saved at…`, `Failed to save`).
-- [ ] `ImageUploadField.vue` shows thumbnails for selected local files and persisted server files when reopening records.
 - [ ] Cloudflare Access identity is validated (when configured), and mutating operations stamp created/updated emails accordingly.
-- [ ] Existing pre-change session files are still readable without migration failure.
 
 ---
 
 ### Test Strategy
 | Layer | What | How |
 |---|---|---|
-| Backend unit | Model compatibility defaults, lifecycle transitions, status update rules | Extend `test_report_repository.py` |
+| Backend unit | SQLite repository CRUD, lifecycle transitions, status update rules | Extend/replace `test_report_repository.py` |
 | Backend integration | New list/read/status/image endpoints; autosave semantics; completed->draft reopening | Extend `test_reports_api.py` |
 | Backend auth | CF JWT validation + missing-token behavior when configured | Add/restore `tests/test_cf_access_auth.py` |
-| Frontend unit | Dashboard rendering/actions; autosave state; thumbnail rendering | Add/update Vue test specs |
+| Frontend unit | Dashboard rendering/actions; autosave state | Add/update Vue test specs |
 | End-to-end (optional) | Create -> autosave -> leave -> resume -> edit completed -> regenerate | Playwright flow |
 
 ---
@@ -247,7 +256,7 @@ Implement persistent server-backed draft editing with an all-user dashboard and 
 |---|---|---|---|
 | Cloudflare cert fetch/JWT validation failures block writes | Medium | High | Cache certs, clear 503 errors, local-dev bypass when CF env not configured |
 | Increased disk usage because completed images are retained | High | Medium | Keep file-size/group limits; add future archived-retention cleanup policy |
-| Autosave race conditions overwrite recent changes | Medium | Medium | Debounce + single-flight request queue + last-write-wins behavior documented |
+| Autosave race conditions overwrite recent changes | Medium | Medium | SQLite atomic writes + debounce + single-flight request queue; `version` column ready for optimistic locking in future phase |
 | Cross-user concurrent edits cause silent clobbering | Medium | Medium | Show `updated_at`/`updated_by` in UI; document non-goal for optimistic locking in phase 1 |
 
 ---
@@ -255,6 +264,7 @@ Implement persistent server-backed draft editing with an all-user dashboard and 
 ### Trade-offs Made
 | Chose | Over | Because |
 |---|---|---|
+| SQLite for session metadata + filesystem for images | Filesystem JSON for everything | Atomic writes, efficient listing/filtering, clean path to optimistic locking; images don't belong in a DB |
 | Server-backed autosave + manual save fallback | Manual-save only | Prevents data loss and supports resume/dashboard consistency |
 | Keep `draft` backend status value as in-progress label | Renaming to `in_progress` now | Minimizes migration impact for existing stored sessions/tests |
 | Replace-group image API for edits | Only append-style upload API | Aligns with current UI behavior where users reselect full group and expect replacement |
